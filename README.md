@@ -16,13 +16,56 @@ V0.5 adds a local backend upload test:
 touch tap -> camera capture -> POST JPEG to Mac -> OLED shows backend response
 ```
 
-## Hardware
+## Parts Used
+
+This is currently a desk prototype, not a polished wearable build.
+
+Main electronics:
 
 - Seeed Studio XIAO ESP32S3 Sense
-- MusRock 0.66 inch 64x48 SSD1306 OLED on I2C
+- Built-in XIAO camera
+- Built-in XIAO microphone, not used yet
+- XIAO Wi-Fi/BLE
+- XIAO PSRAM for camera frame buffers
+- MusRock 0.66 inch 64x48 SSD1306 OLED display module
 - TTP223 capacitive touch sensor
-- USB-C power during development
+
+Current power and wiring:
+
+- USB-C cable from MacBook to XIAO for development power and upload
+- Dupont/jumper wires for the desk prototype
+- OLED and touch sensor share XIAO `3V3` and `GND`
+- OLED uses I2C in this build
 - No separate switch or power-management parts yet
+
+OLED wiring:
+
+```text
+OLED GND -> XIAO GND
+OLED VCC -> XIAO 3V3
+OLED SDA -> XIAO D4
+OLED SCL -> XIAO D5
+```
+
+Touch sensor wiring:
+
+```text
+TTP223 VCC     -> XIAO 3V3
+TTP223 GND     -> XIAO GND
+TTP223 OUT/SIG -> XIAO D2
+```
+
+The OLED listing is for a 0.66 inch 64x48 white/blue SSD1306 module with
+IIC/I2C/SPI in the product title, but this project currently uses the 4-pin I2C
+interface. Amazon listing/ASIN: `B0FGD4D4MS`.
+
+Planned but not part of the current build:
+
+- 3.7V LiPo battery
+- Physical power switch
+- Dedicated power-management parts
+- Wearable frame mounting
+- Short soldered silicone wiring
 
 Current wiring is documented in
 `docs/haolens-v0-project-brief.md`.

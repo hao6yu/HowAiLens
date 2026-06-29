@@ -13,11 +13,17 @@ a PlatformIO project.
 ## Hardware
 
 - Seeed Studio XIAO ESP32S3 Sense
-- 0.66 inch 64x48 SSD1306 OLED on I2C
+- MusRock 0.66 inch 64x48 SSD1306 OLED on I2C
 - TTP223 capacitive touch sensor
+- USB-C power during development
+- No separate switch or power-management parts yet
 
 Current wiring is documented in
 `docs/haolens-v0-project-brief.md`.
+
+OLED note: the display is tiny. At the current default font size, assume roughly
+10 characters per line and design status/AI text as short phrases, not
+paragraphs.
 
 ## Configure Wi-Fi
 

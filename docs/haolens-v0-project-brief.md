@@ -33,12 +33,18 @@ This project is intentionally starting small. It is not trying to build producti
 
 ### Display
 
-- **0.66 inch OLED**
+- **MusRock 0.66 inch OLED display module**
 - 64x48 resolution
 - SSD1306 driver
-- I2C/IIC interface
+- White/blue OLED listing
+- I2C/IIC interface in current wiring
+- Product listing also mentions SPI support, but the current module is used as a 4-pin I2C display:
+  - `GND`
+  - `VCC`
+  - `SCL`
+  - `SDA`
 - 3.3V operation
-- Pins: `GND`, `VCC`, `SCL`, `SDA`
+- Amazon listing: `B0FGD4D4MS`
 
 ### Input
 
@@ -51,6 +57,7 @@ This project is intentionally starting small. It is not trying to build producti
 
 - Currently powered by **USB-C from MacBook**
 - Battery not required for coding/testing
+- No separate switch or power-management parts have been purchased yet
 - Battery will be added later for wearable testing
 - Planned battery type:
   - 3.7V LiPo
@@ -522,6 +529,10 @@ Because the OLED is only 64x48, responses must be short.
 - Very small screen
 - Good for short status/result text only
 - Not suitable for long AI responses
+- At the current default font size, the display fits roughly 10 characters per line
+- Although 64x48 pixels can physically fit about 6 tiny text rows, practical UI should use fewer rows for readability
+- AI responses should be compressed to short phrases, ideally 1-3 lines
+- Firmware should avoid sending long paragraphs directly to the OLED
 
 ### XIAO ESP32S3 Sense
 

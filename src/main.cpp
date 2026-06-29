@@ -74,6 +74,17 @@ bool lastTouched = false;
 unsigned long lastTouchTime = 0;
 const unsigned long TOUCH_DEBOUNCE_MS = 800;
 
+// ===== Connection state =====
+bool wifiWasConnected = false;
+bool backendAvailable = false;
+unsigned long lastWifiReconnectAttempt = 0;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
+const unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
+const unsigned long BACKEND_HEALTH_TIMEOUT_MS = 5000;
+const unsigned long BACKEND_UPLOAD_TIMEOUT_MS = 15000;
+
+bool backendIsConfigured();
+
 // ===== OLED helper =====
 String fitOledLine(String line) {
   line.trim();
@@ -218,7 +229,10 @@ void handleRoot() {
   html += "<p><a href='/capture'>Browser Capture</a></p>";
   html += "<p><a href='/last'>View Last Touch Capture</a></p>";
   html += "<p>Tap the touch sensor, then open /last.</p>";
-  html += "<p>V0.5: touch capture also posts to the local backend if configured.</p>";
+  html += "<p>V0.5.1: touch capture also posts to the local backend if configured.</p>";
+  html += "<p>Backend: ";
+  html += backendIsConfigured() ? (backendAvailable ? "OK" : "not reachable") : "off";
+  html += "</p>";
   html += "</body></html>";
 
   server.send(200, "text/html", html);
@@ -305,6 +319,138 @@ bool backendIsConfigured() {
   return std::strlen(BACKEND_URL) > 0 && std::strstr(BACKEND_URL, "YOUR_MAC_IP") == nullptr;
 }
 
+String backendHealthUrl() {
+  String url = BACKEND_URL;
+  int schemeEnd = url.indexOf("://");
+  int pathSearchStart = schemeEnd >= 0 ? schemeEnd + 3 : 0;
+  int pathStart = url.indexOf('/', pathSearchStart);
+
+  if (pathStart >= 0) {
+    url = url.substring(0, pathStart);
+  }
+
+  return url + "/health";
+}
+
+void showReady() {
+  if (!backendIsConfigured()) {
+    showMessage("Ready", "Back off", "Tap photo");
+    return;
+  }
+
+  showMessage("Ready", backendAvailable ? "Backend OK" : "Back fail", "Tap photo");
+}
+
+bool connectWiFi(unsigned long timeoutMs) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+
+  Serial.print("Connecting to WiFi");
+  WiFi.disconnect(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  unsigned long startTime = millis();
+
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < timeoutMs) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi connection timed out.");
+    return false;
+  }
+
+  Serial.print("WiFi connected. IP: ");
+  Serial.println(WiFi.localIP());
+  return true;
+}
+
+bool checkBackendHealth(bool updateDisplay = true) {
+  if (!backendIsConfigured()) {
+    Serial.println("Backend URL is not configured.");
+    if (updateDisplay) showMessage("Backend", "off");
+    return false;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected; cannot check backend.");
+    if (updateDisplay) showMessage("WiFi lost", "No check");
+    return false;
+  }
+
+  String healthUrl = backendHealthUrl();
+  Serial.print("Checking backend health: ");
+  Serial.println(healthUrl);
+  if (updateDisplay) showMessage("Backend", "checking");
+
+  HTTPClient http;
+  http.setTimeout(BACKEND_HEALTH_TIMEOUT_MS);
+
+  if (!http.begin(healthUrl)) {
+    Serial.println("Failed to start backend health request.");
+    if (updateDisplay) showMessage("Backend", "setup fail");
+    return false;
+  }
+
+  int statusCode = http.GET();
+  String errorText = statusCode <= 0 ? http.errorToString(statusCode) : "";
+  http.end();
+
+  Serial.printf("Backend health status: %d\n", statusCode);
+
+  if (statusCode >= 200 && statusCode < 300) {
+    if (updateDisplay) showMessage("Backend OK");
+    return true;
+  }
+
+  if (statusCode <= 0) {
+    Serial.print("Backend health error: ");
+    Serial.println(errorText);
+    if (updateDisplay) showMessage("Backend", "offline");
+    return false;
+  }
+
+  char statusText[16];
+  snprintf(statusText, sizeof(statusText), "HTTP %d", statusCode);
+  if (updateDisplay) showMessage("Backend", "failed", statusText);
+  return false;
+}
+
+void ensureWiFiConnected() {
+  unsigned long now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiWasConnected) {
+      wifiWasConnected = true;
+      Serial.print("WiFi reconnected. IP: ");
+      Serial.println(WiFi.localIP());
+      backendAvailable = checkBackendHealth(false);
+      showReady();
+    }
+    return;
+  }
+
+  if (wifiWasConnected) {
+    Serial.println("WiFi disconnected.");
+    showMessage("WiFi lost", "Retrying");
+    wifiWasConnected = false;
+    backendAvailable = false;
+  }
+
+  if (now - lastWifiReconnectAttempt < WIFI_RECONNECT_INTERVAL_MS) {
+    return;
+  }
+
+  lastWifiReconnectAttempt = now;
+  Serial.println("Attempting WiFi reconnect...");
+  WiFi.disconnect(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+}
+
 String parseBackendText(const String& responseBody) {
   StaticJsonDocument<384> doc;
   DeserializationError error = deserializeJson(doc, responseBody);
@@ -328,7 +474,7 @@ bool uploadLatestToBackend() {
 
   if (!backendIsConfigured()) {
     Serial.println("Backend URL is not configured; skipping upload.");
-    showMessage("Saved photo", "Backend", "off");
+    showMessage("Saved", "Back off");
     return false;
   }
 
@@ -338,12 +484,22 @@ bool uploadLatestToBackend() {
     return false;
   }
 
+  if (!backendAvailable) {
+    Serial.println("Backend is not marked available; checking before upload.");
+    backendAvailable = checkBackendHealth(true);
+
+    if (!backendAvailable) {
+      showMessage("Backend", "offline");
+      return false;
+    }
+  }
+
   Serial.print("Uploading latest image to backend: ");
   Serial.println(BACKEND_URL);
   showMessage("Uploading", "backend");
 
   HTTPClient http;
-  http.setTimeout(15000);
+  http.setTimeout(BACKEND_UPLOAD_TIMEOUT_MS);
 
   if (!http.begin(BACKEND_URL)) {
     Serial.println("Failed to start HTTP connection.");
@@ -355,12 +511,21 @@ bool uploadLatestToBackend() {
   http.addHeader("Cache-Control", "no-store");
 
   int statusCode = http.POST(lastJpeg, lastJpegLen);
-  String responseBody = http.getString();
+  String responseBody = statusCode > 0 ? http.getString() : "";
+  String errorText = statusCode <= 0 ? http.errorToString(statusCode) : "";
   http.end();
 
   Serial.printf("Backend HTTP status: %d\n", statusCode);
   Serial.print("Backend response: ");
   Serial.println(responseBody);
+
+  if (statusCode <= 0) {
+    Serial.print("Backend upload error: ");
+    Serial.println(errorText);
+    backendAvailable = false;
+    showMessage("Upload", "failed", "No HTTP");
+    return false;
+  }
 
   if (statusCode < 200 || statusCode >= 300) {
     char statusText[16];
@@ -375,6 +540,7 @@ bool uploadLatestToBackend() {
     responseText = "Image OK";
   }
 
+  backendAvailable = true;
   showWrappedText(responseText, 4);
   return true;
 }
@@ -429,24 +595,24 @@ void setup() {
     while (true) delay(1000);
   }
 
-  showMessage("WiFi", "Connecting...");
+  showMessage("WiFi", "Connect");
 
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  while (!connectWiFi(WIFI_CONNECT_TIMEOUT_MS)) {
+    showMessage("WiFi fail", "Retrying");
+    delay(2000);
   }
 
-  Serial.println();
-  Serial.println("WiFi connected.");
+  wifiWasConnected = true;
   Serial.print("Open this URL: http://");
   Serial.println(WiFi.localIP());
   Serial.print("Backend URL: ");
   Serial.println(backendIsConfigured() ? BACKEND_URL : "(not configured)");
 
-  String ip = WiFi.localIP().toString();
-  showMessage("Open URL", ip.c_str());
+  backendAvailable = checkBackendHealth(true);
 
   server.on("/", handleRoot);
   server.on("/capture", handleCapture);
@@ -454,9 +620,11 @@ void setup() {
   server.begin();
 
   Serial.println("HTTP server started.");
+  showReady();
 }
 
 void loop() {
+  ensureWiFiConnected();
   server.handleClient();
 
   bool touched = digitalRead(TOUCH_PIN) == HIGH;

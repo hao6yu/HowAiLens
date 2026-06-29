@@ -16,6 +16,9 @@ V0.5 adds a local backend upload test:
 touch tap -> camera capture -> POST JPEG to Mac -> OLED shows backend response
 ```
 
+V0.5.1 hardens that loop with backend health checks, clearer OLED states, Wi-Fi
+reconnect handling, and a simple backend browser page.
+
 ## Parts Used
 
 This is currently a desk prototype, not a polished wearable build.
@@ -92,7 +95,7 @@ XIAO is a separate device on Wi-Fi.
 
 ## Local Backend
 
-Start the local backend before testing V0.5:
+Start the local backend before testing V0.5.1:
 
 ```sh
 node tools/local-backend/server.js
@@ -114,8 +117,13 @@ tools/local-backend/uploads/latest.jpg
 You can also view it in a browser:
 
 ```text
+http://<YOUR_MAC_IP>:8787/
 http://<YOUR_MAC_IP>:8787/latest.jpg
+http://<YOUR_MAC_IP>:8787/health
 ```
+
+Firmware checks `/health` on boot and before upload if the backend was not
+already marked available.
 
 ## PlatformIO Workflow
 
@@ -146,5 +154,5 @@ http://<XIAO_IP>/last
 ```
 
 Tap the touch sensor first, then open `/last` to view the latest touch-triggered
-photo. In V0.5, the same touch capture also posts the image to the configured
+photo. In V0.5.1, the same touch capture also posts the image to the configured
 local backend.

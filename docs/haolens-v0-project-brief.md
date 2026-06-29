@@ -31,6 +31,16 @@ Touch sensor tap
 
 V0.5 intentionally does not call AI yet. It proves the upload/response loop first.
 
+V0.5.1 hardens the local upload loop:
+
+```text
+Backend exposes /health
+Backend home page shows configuration URLs and latest upload
+Firmware checks backend health
+Firmware retries Wi-Fi reconnects
+OLED states are shorter and clearer
+```
+
 ---
 
 ## Current hardware
@@ -516,6 +526,15 @@ Current local backend command:
 node tools/local-backend/server.js
 ```
 
+Useful local backend routes:
+
+```text
+/          = browser status page
+/health    = JSON health check
+/analyze   = POST JPEG endpoint
+/latest.jpg = latest uploaded image
+```
+
 The firmware backend URL lives in local-only `include/secrets.h`:
 
 ```cpp
@@ -684,6 +703,7 @@ Status:
 V0 hardware proof is working.
 PlatformIO migration is working.
 V0.5 local backend upload loop is working.
+V0.5.1 local loop hardening is working in firmware build.
 ```
 
 Completed:
@@ -700,6 +720,8 @@ PlatformIO build/upload workflow
 Public GitHub repo
 V0.0 git tag
 Local backend upload test
+Backend health/page routes
+Wi-Fi reconnect handling
 ```
 
 Next:

@@ -26,6 +26,24 @@ function localAddresses() {
   return addresses;
 }
 
+function latestImageInfo() {
+  if (!fs.existsSync(latestImagePath)) {
+    return {
+      exists: false,
+      size: 0,
+      updatedAt: null,
+    };
+  }
+
+  const stat = fs.statSync(latestImagePath);
+
+  return {
+    exists: true,
+    size: stat.size,
+    updatedAt: stat.mtime.toISOString(),
+  };
+}
+
 function sendJson(res, status, body) {
   const json = JSON.stringify(body);
 
@@ -37,17 +55,46 @@ function sendJson(res, status, body) {
   res.end(json);
 }
 
+function sendText(res, status, body) {
+  res.writeHead(status, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store",
+  });
+  res.end(body);
+}
+
+function handleHealth(req, res) {
+  sendJson(res, 200, {
+    ok: true,
+    service: "haolens-local-backend",
+    version: "0.5.1",
+    maxUploadBytes: maxBytes,
+    latestImage: latestImageInfo(),
+  });
+}
+
 function handleAnalyze(req, res) {
   const chunks = [];
   let totalBytes = 0;
+  let rejected = false;
 
   req.on("data", (chunk) => {
+    if (rejected) {
+      return;
+    }
+
     totalBytes += chunk.length;
 
     if (totalBytes > maxBytes) {
-      res.writeHead(413, { "Content-Type": "text/plain" });
-      res.end("Upload too large");
-      req.destroy();
+      rejected = true;
+      sendJson(res, 413, {
+        ok: false,
+        text: "Too large",
+        error: "Upload too large",
+        maxBytes,
+      });
+      req.resume();
       return;
     }
 
@@ -55,12 +102,27 @@ function handleAnalyze(req, res) {
   });
 
   req.on("end", () => {
+    if (rejected) {
+      return;
+    }
+
     const image = Buffer.concat(chunks);
+
+    if (image.length === 0) {
+      sendJson(res, 400, {
+        ok: false,
+        text: "No image",
+        error: "Request body was empty",
+      });
+      return;
+    }
+
     fs.writeFileSync(latestImagePath, image);
 
     console.log(`Saved ${image.length} bytes to ${latestImagePath}`);
 
     sendJson(res, 200, {
+      ok: true,
       text: "Image OK",
       bytes: image.length,
       savedAs: latestImagePath,
@@ -74,8 +136,7 @@ function handleAnalyze(req, res) {
 
 function handleLatest(req, res) {
   if (!fs.existsSync(latestImagePath)) {
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("No image uploaded yet");
+    sendText(res, 404, "No image uploaded yet");
     return;
   }
 
@@ -90,19 +151,45 @@ function handleLatest(req, res) {
 
 function handleHome(req, res) {
   const addresses = localAddresses();
-  const body = [
-    "HaoLens local backend",
-    "",
-    "POST /analyze with image/jpeg",
-    "GET  /latest.jpg to view the last upload",
-    "",
-    "Use one of these URLs in include/secrets.h:",
-    ...addresses.map((address) => `http://${address}:${port}/analyze`),
-    "",
-  ].join("\n");
+  const latest = latestImageInfo();
+  const firmwareUrls = addresses.map((address) => `http://${address}:${port}/analyze`);
+  const healthUrls = addresses.map((address) => `http://${address}:${port}/health`);
+  const cacheBust = latest.updatedAt ? encodeURIComponent(latest.updatedAt) : Date.now();
+  const latestHtml = latest.exists
+    ? `<p><a href="/latest.jpg">latest.jpg</a> (${latest.size} bytes, ${latest.updatedAt})</p>
+       <img src="/latest.jpg?t=${cacheBust}" alt="Latest HaoLens upload" style="max-width: min(100%, 720px); border: 1px solid #ccc;">`
+    : "<p>No image uploaded yet.</p>";
+
+  const body = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HaoLens Local Backend</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.4; margin: 24px; max-width: 900px; }
+    code { background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>HaoLens Local Backend</h1>
+  <p>Status: <strong>OK</strong></p>
+
+  <h2>Firmware URL</h2>
+  <p>Use one of these in <code>include/secrets.h</code>:</p>
+  <ul>${firmwareUrls.map((url) => `<li><code>${url}</code></li>`).join("")}</ul>
+
+  <h2>Health</h2>
+  <ul>${healthUrls.map((url) => `<li><a href="${url}">${url}</a></li>`).join("")}</ul>
+
+  <h2>Latest Upload</h2>
+  ${latestHtml}
+</body>
+</html>`;
 
   res.writeHead(200, {
-    "Content-Type": "text/plain",
+    "Content-Type": "text/html; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
     "Cache-Control": "no-store",
   });
@@ -115,7 +202,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === "GET" && req.url === "/latest.jpg") {
+  if (req.method === "GET" && req.url === "/health") {
+    handleHealth(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && req.url.split("?")[0] === "/latest.jpg") {
     handleLatest(req, res);
     return;
   }
@@ -125,12 +217,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  res.writeHead(404, { "Content-Type": "text/plain" });
-  res.end("Not found");
+  sendText(res, 404, "Not found");
 });
 
 server.listen(port, host, () => {
   console.log(`HaoLens local backend listening on http://localhost:${port}`);
+  console.log(`Health check: http://localhost:${port}/health`);
   for (const address of localAddresses()) {
     console.log(`Use in firmware: http://${address}:${port}/analyze`);
   }

@@ -113,7 +113,7 @@ function sendText(res, status, body) {
 function handleHealth(req, res) {
   sendJson(res, 200, {
     ok: true,
-    service: "haolens-local-backend",
+    service: "howailens-local-backend",
     version: "0.7.0",
     maxUploadBytes: maxBytes,
     ai: openaiStatus(),
@@ -492,7 +492,7 @@ function handleHome(req, res) {
   const cacheBust = latest.updatedAt ? encodeURIComponent(latest.updatedAt) : Date.now();
   const latestHtml = latest.exists
     ? `<p><a href="/latest.jpg">latest.jpg</a> (${latest.size} bytes, ${latest.updatedAt})</p>
-       <img src="/latest.jpg?t=${cacheBust}" alt="Latest HaoLens upload" style="max-width: min(100%, 720px); border: 1px solid #ccc;">`
+       <img src="/latest.jpg?t=${cacheBust}" alt="Latest HowAILens upload" style="max-width: min(100%, 720px); border: 1px solid #ccc;">`
     : "<p>No image uploaded yet.</p>";
   const ai = openaiStatus();
   const aiHtml = ai.configured
@@ -513,7 +513,7 @@ function handleHome(req, res) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HaoLens Local Backend</title>
+  <title>HowAILens Local Backend</title>
   <style>
     body { font-family: system-ui, sans-serif; line-height: 1.4; margin: 24px; max-width: 900px; }
     code { background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }
@@ -521,7 +521,7 @@ function handleHome(req, res) {
   </style>
 </head>
 <body>
-  <h1>HaoLens Local Backend</h1>
+  <h1>HowAILens Local Backend</h1>
   <p>Status: <strong>OK</strong></p>
 
   <h2>Firmware URL</h2>
@@ -588,7 +588,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`HaoLens local backend listening on http://localhost:${port}`);
+  console.log(`HowAILens local backend listening on http://localhost:${port}`);
   console.log(`Health check: http://localhost:${port}/health`);
   console.log(`AI mode: ${openaiApiKey ? "OpenAI" : "mock"} (${openaiModel}, detail=${openaiImageDetail})`);
   if (openaiApiKey && typeof fetch !== "function") {

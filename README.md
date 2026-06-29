@@ -1,7 +1,7 @@
-# HaoLens V0
+# HowAILens V0
 
-HaoLens V0 is a Seeed Studio XIAO ESP32S3 Sense prototype for testing the first
-AI glasses loop:
+HowAILens V0 is a Seeed Studio XIAO ESP32S3 Sense prototype for testing the
+first wearable AI loop:
 
 ```text
 touch tap -> camera capture -> OLED status -> browser can view JPEG
@@ -9,6 +9,9 @@ touch tap -> camera capture -> OLED status -> browser can view JPEG
 
 The current firmware keeps the proven Arduino IDE behavior, but is now set up as
 a PlatformIO project.
+
+The long-term goal is to integrate this wearable capture/display prototype with
+HowAI, the broader AI application this project is named for.
 
 V0.5 adds a local backend upload test:
 

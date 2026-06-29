@@ -1,8 +1,8 @@
-# HaoLens V0 — AI Glasses Prototype
+# HowAILens V0 — AI Glasses Prototype
 
 ## Project summary
 
-**HaoLens V0** is an ugly-but-working AI glasses prototype built around the **Seeed Studio XIAO ESP32S3 Sense**. The goal is to prove the core smart-glasses loop first, before worrying about polish, custom PCB, optics, frame design, battery optimization, or audio.
+**HowAILens V0** is an ugly-but-working AI glasses prototype built around the **Seeed Studio XIAO ESP32S3 Sense**. The goal is to prove the core smart-glasses loop first, before worrying about polish, custom PCB, optics, frame design, battery optimization, or audio. The longer-term product direction is integration with HowAI, the broader AI application this project is named for.
 
 Current V0 goal:
 
@@ -412,7 +412,7 @@ PlatformIO will make this easier to maintain and easier for Codex to edit.
 ## Suggested PlatformIO project structure
 
 ```text
-haolens-v0/
+HowAiLens/
   platformio.ini
   README.md
   .gitignore
@@ -434,7 +434,7 @@ haolens-v0/
 For the first PlatformIO migration, keep it simple:
 
 ```text
-haolens-v0/
+HowAiLens/
   platformio.ini
   src/
     main.cpp
@@ -481,7 +481,7 @@ This is the known-good backup.
 Create a new PlatformIO project:
 
 ```text
-Project name: haolens-v0
+Project name: HowAiLens
 Board: Seeed XIAO ESP32S3
 Framework: Arduino
 ```
@@ -520,7 +520,7 @@ Touch capture works
 Commit once PlatformIO version works:
 
 ```text
-git commit -m "Initial HaoLens V0 touch camera web prototype"
+git commit -m "Initial HowAILens V0 touch camera web prototype"
 ```
 
 ---
@@ -731,16 +731,16 @@ If unstable or memory issues occur, step back to VGA.
 
 ## Project name ideas
 
-Working project name:
+Project name:
 
 ```text
-HaoLens
+HowAILens
 ```
 
-Suggested repo name:
+Repo name:
 
 ```text
-haolens-v0
+HowAiLens
 ```
 
 Alternative names:

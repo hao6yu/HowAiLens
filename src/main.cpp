@@ -261,7 +261,7 @@ bool initCamera() {
 void handleRoot() {
   String html = "";
   html += "<html><body>";
-  html += "<h2>XIAO AI Glass Camera</h2>";
+  html += "<h2>HowAILens Camera</h2>";
   html += "<p><a href='/capture'>Browser Capture</a></p>";
   html += "<p><a href='/last'>View Last Touch Capture</a></p>";
   html += "<p>Tap the touch sensor, then open /last.</p>";
@@ -638,7 +638,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Serial.println("Starting AI Glass camera web server...");
+  Serial.println("Starting HowAILens camera web server...");
 
   pinMode(TOUCH_PIN, INPUT);
 

@@ -37,6 +37,8 @@ max 3 lines -> max 11 chars per line
 Future IMSAIGateway realtime-agent planning is captured in
 [docs/howailens-imsaigateway-realtime-plan.md](docs/howailens-imsaigateway-realtime-plan.md).
 
+The high-level project roadmap lives in [docs/roadmap.md](docs/roadmap.md).
+
 ## Parts Used
 
 This is currently a desk prototype, not a polished wearable build.

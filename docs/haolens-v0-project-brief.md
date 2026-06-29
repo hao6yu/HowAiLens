@@ -75,7 +75,7 @@ Current V0.7 goal:
 
 ```text
 Shape AI result for the 64x48 OLED
-→ max 2 lines
+→ max 3 readable lines
 → max 10 characters per line
 → preserve line breaks on firmware
 → show last AI result on XIAO root page
@@ -601,7 +601,7 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
 HAOLENS_OLED_LINE_CHARS=10
-HAOLENS_OLED_MAX_LINES=2
+HAOLENS_OLED_MAX_LINES=3
 ```
 
 ---
@@ -641,7 +641,7 @@ Because the OLED is only 64x48, responses must be short.
 - Not suitable for long AI responses
 - At the current default font size, the display fits roughly 10 characters per line
 - Although 64x48 pixels can physically fit about 6 tiny text rows, practical UI should use fewer rows for readability
-- AI responses should be compressed to short phrases, ideally 1-3 lines
+- AI responses should be compressed to up to three short display lines
 - Firmware should avoid sending long paragraphs directly to the OLED
 
 ### XIAO ESP32S3 Sense

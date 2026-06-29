@@ -37,7 +37,7 @@ const char* BACKEND_URL = HAOLENS_BACKEND_URL;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 constexpr uint8_t OLED_CHARS_PER_LINE = 10;
-constexpr uint8_t OLED_MAX_LINES = 6;
+constexpr uint8_t OLED_MAX_LINES = 3;
 
 // ===== Touch sensor =====
 // TTP223 OUT/SIG -> XIAO D2
@@ -115,9 +115,9 @@ void drawOledLines(String lines[], uint8_t lineCount) {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setTextWrap(false);
+  display.setCursor(0, 0);
 
   for (uint8_t i = 0; i < lineCount && i < OLED_MAX_LINES; i++) {
-    display.setCursor(0, i * 8);
     display.println(fitOledLine(lines[i]));
   }
 
@@ -128,9 +128,27 @@ void showMessage(const char* line1, const char* line2 = "", const char* line3 = 
   String lines[OLED_MAX_LINES];
   uint8_t lineCount = 0;
 
+  if (OLED_MAX_LINES == 1) {
+    String line = line1;
+
+    if (std::strlen(line2) > 0) {
+      line += " ";
+      line += line2;
+    }
+
+    if (std::strlen(line3) > 0) {
+      line += " ";
+      line += line3;
+    }
+
+    lines[lineCount++] = line;
+    drawOledLines(lines, lineCount);
+    return;
+  }
+
   if (std::strlen(line1) > 0) lines[lineCount++] = line1;
-  if (std::strlen(line2) > 0) lines[lineCount++] = line2;
-  if (std::strlen(line3) > 0) lines[lineCount++] = line3;
+  if (std::strlen(line2) > 0 && lineCount < OLED_MAX_LINES) lines[lineCount++] = line2;
+  if (std::strlen(line3) > 0 && lineCount < OLED_MAX_LINES) lines[lineCount++] = line3;
 
   drawOledLines(lines, lineCount);
 }
@@ -139,8 +157,9 @@ void showWrappedText(const String& text, uint8_t maxLines = OLED_MAX_LINES) {
   String lines[OLED_MAX_LINES];
   uint8_t lineCount = 0;
   int position = 0;
+  uint8_t allowedLines = min(maxLines, OLED_MAX_LINES);
 
-  while (position < static_cast<int>(text.length()) && lineCount < maxLines) {
+  while (position < static_cast<int>(text.length()) && lineCount < allowedLines) {
     while (position < static_cast<int>(text.length()) &&
            (text[position] == ' ' || text[position] == '\r' || text[position] == '\n')) {
       position++;
@@ -589,7 +608,7 @@ bool uploadLatestToBackend() {
   lastAiText = responseText;
   lastUploadStatus = "ok";
   lastResultTime = millis();
-  showWrappedText(responseText, 4);
+  showWrappedText(responseText, OLED_MAX_LINES);
   return true;
 }
 

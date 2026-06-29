@@ -28,7 +28,7 @@ touch tap -> POST JPEG to Mac -> OpenAI vision -> short OLED-safe response
 V0.7 shapes AI responses for the tiny OLED:
 
 ```text
-max 2 lines -> max 10 chars per line
+max 3 lines -> max 10 chars per line
 ```
 
 ## Parts Used
@@ -126,7 +126,7 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
 HAOLENS_OLED_LINE_CHARS=10
-HAOLENS_OLED_MAX_LINES=2
+HAOLENS_OLED_MAX_LINES=3
 ```
 
 If `OPENAI_API_KEY` is empty, the backend stays in mock mode and returns the
@@ -170,7 +170,7 @@ with a small memory budget. The firmware reads the `text` field:
 { "ok": true, "text": "short OLED result", "mode": "openai" }
 ```
 
-For V0.7, the backend asks the model for 1-2 OLED-ready lines and still
+For V0.7, the backend asks the model for up to three OLED-ready lines and still
 sanitizes the result before sending it to the board. Example:
 
 ```text

@@ -18,7 +18,7 @@ const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const openaiImageDetail = process.env.OPENAI_IMAGE_DETAIL || "low";
 const openaiTimeoutMs = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
 const oledLineChars = Number(process.env.HAOLENS_OLED_LINE_CHARS || 10);
-const oledMaxLines = Number(process.env.HAOLENS_OLED_MAX_LINES || 2);
+const oledMaxLines = Number(process.env.HAOLENS_OLED_MAX_LINES || 3);
 const mockText = process.env.HAOLENS_AI_MOCK_TEXT || "AI off";
 let lastAnalysis = null;
 
@@ -158,6 +158,10 @@ function cleanOledText(text) {
     return "Not sure";
   }
 
+  if (oledMaxLines === 1) {
+    return wrapWords(words, 1).join("\n");
+  }
+
   if (raw.includes("\n")) {
     const lines = [];
 
@@ -175,7 +179,7 @@ function cleanOledText(text) {
     }
   }
 
-  if (!raw.includes("\n") && oledMaxLines >= 2) {
+  if (!raw.includes("\n") && oledMaxLines === 2) {
     const firstLine = takeWordsFromStart(words);
     const consumedWords = firstLine ? firstLine.split(/\s+/).length : 0;
 
@@ -331,13 +335,17 @@ async function analyzeImageWithOpenAI(image) {
   }
 
   const base64Image = image.toString("base64");
+  const lineInstruction =
+    oledMaxLines === 1
+      ? `Return exactly one line, ${oledLineChars} characters or fewer.`
+      : `Return 1 to ${oledMaxLines} lines. Each line must be ${oledLineChars} characters or fewer.`;
   const prompt = [
     "Describe this image for a tiny 64x48 OLED display.",
-    `Return 1 or 2 lines. Each line must be ${oledLineChars} characters or fewer.`,
-    "Prefer two short lines over one cramped phrase.",
-    "Use simple concrete words. No markdown. No punctuation unless needed.",
+    lineInstruction,
+    "Use short concrete words. Put location on another line if useful.",
+    "No markdown. No punctuation.",
     "Return only the display text.",
-    "Good examples: Cable\\nnear wall | Red mug | Open door",
+    "Good examples: Cable\\nfloor | Red mug | Open door",
     "If unclear, return exactly: Not sure",
   ].join(" ");
 

@@ -1,0 +1,4 @@
+#pragma once
+
+#define HAOLENS_WIFI_SSID "YOUR_WIFI_NAME"
+#define HAOLENS_WIFI_PASS "YOUR_WIFI_PASSWORD"

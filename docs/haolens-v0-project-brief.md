@@ -17,6 +17,20 @@ Touch sensor tap
 
 This project is intentionally starting small. It is not trying to build production smart glasses yet. The first milestone is proving the camera + input + display + Wi-Fi workflow.
 
+Current V0.5 goal:
+
+```text
+Touch sensor tap
+→ XIAO camera captures photo
+→ latest photo is still available at /last
+→ XIAO POSTs JPEG to local backend on Mac
+→ backend saves latest.jpg
+→ backend returns short JSON response
+→ OLED displays backend response
+```
+
+V0.5 intentionally does not call AI yet. It proves the upload/response loop first.
+
 ---
 
 ## Current hardware
@@ -465,6 +479,8 @@ Touch
 → OLED displays returned text
 ```
 
+This is the V0.5 milestone.
+
 Recommended V1 backend path:
 
 ```text
@@ -488,11 +504,26 @@ Expected first backend flow:
 ```text
 XIAO POST /analyze with JPEG
 Local server saves image
-Local server returns: "Image received"
-XIAO OLED shows: "Image received"
+Local server returns: "Image OK"
+XIAO OLED shows: "Image OK"
 ```
 
 Then replace backend response with AI vision result.
+
+Current local backend command:
+
+```sh
+node tools/local-backend/server.js
+```
+
+The firmware backend URL lives in local-only `include/secrets.h`:
+
+```cpp
+#define HAOLENS_BACKEND_URL "http://YOUR_MAC_IP:8787/analyze"
+```
+
+Use the Mac's LAN IP address printed by the backend. Do not use `localhost`,
+because the XIAO runs on a separate device.
 
 ---
 
@@ -651,8 +682,8 @@ Status:
 
 ```text
 V0 hardware proof is working.
-Ready to migrate to PlatformIO.
-Next major feature: upload captured image to backend.
+PlatformIO migration is working.
+V0.5 local backend upload loop is working.
 ```
 
 Completed:
@@ -665,14 +696,16 @@ Camera capture
 Wi-Fi web server
 Browser capture
 Touch-triggered latest capture
+PlatformIO build/upload workflow
+Public GitHub repo
+V0.0 git tag
+Local backend upload test
 ```
 
 Next:
 
 ```text
-Move to VS Code + PlatformIO
-Preserve working behavior
-Add local backend upload
-Add AI vision response
+Add AI vision response after upload loop is stable
 Display AI result on OLED
+Improve wearable packaging and power
 ```

@@ -1,10 +1,12 @@
 #include <Arduino.h>
 #include "esp_camera.h"
+#include <HTTPClient.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <ArduinoJson.h>
 #include <cstring>
 
 #if __has_include("secrets.h")
@@ -19,15 +21,23 @@
 #define HAOLENS_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #endif
 
+#ifndef HAOLENS_BACKEND_URL
+#define HAOLENS_BACKEND_URL ""
+#endif
+
 // ===== Wi-Fi =====
 const char* WIFI_SSID = HAOLENS_WIFI_SSID;
 const char* WIFI_PASS = HAOLENS_WIFI_PASS;
+const char* BACKEND_URL = HAOLENS_BACKEND_URL;
 
 // ===== OLED =====
 #define SCREEN_WIDTH 64
 #define SCREEN_HEIGHT 48
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+constexpr uint8_t OLED_CHARS_PER_LINE = 10;
+constexpr uint8_t OLED_MAX_LINES = 6;
 
 // ===== Touch sensor =====
 // TTP223 OUT/SIG -> XIAO D2
@@ -65,17 +75,90 @@ unsigned long lastTouchTime = 0;
 const unsigned long TOUCH_DEBOUNCE_MS = 800;
 
 // ===== OLED helper =====
-void showMessage(const char* line1, const char* line2 = "", const char* line3 = "") {
+String fitOledLine(String line) {
+  line.trim();
+
+  if (line.length() <= OLED_CHARS_PER_LINE) {
+    return line;
+  }
+
+  return line.substring(0, OLED_CHARS_PER_LINE - 3) + "...";
+}
+
+String addOledEllipsis(String line) {
+  line.trim();
+
+  if (line.length() <= OLED_CHARS_PER_LINE - 3) {
+    return line + "...";
+  }
+
+  return line.substring(0, OLED_CHARS_PER_LINE - 3) + "...";
+}
+
+void drawOledLines(String lines[], uint8_t lineCount) {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
+  display.setTextWrap(false);
 
-  display.println(line1);
-  if (std::strlen(line2) > 0) display.println(line2);
-  if (std::strlen(line3) > 0) display.println(line3);
+  for (uint8_t i = 0; i < lineCount && i < OLED_MAX_LINES; i++) {
+    display.setCursor(0, i * 8);
+    display.println(fitOledLine(lines[i]));
+  }
 
   display.display();
+}
+
+void showMessage(const char* line1, const char* line2 = "", const char* line3 = "") {
+  String lines[OLED_MAX_LINES];
+  uint8_t lineCount = 0;
+
+  if (std::strlen(line1) > 0) lines[lineCount++] = line1;
+  if (std::strlen(line2) > 0) lines[lineCount++] = line2;
+  if (std::strlen(line3) > 0) lines[lineCount++] = line3;
+
+  drawOledLines(lines, lineCount);
+}
+
+void showWrappedText(const String& text, uint8_t maxLines = OLED_MAX_LINES) {
+  String lines[OLED_MAX_LINES];
+  uint8_t lineCount = 0;
+  int position = 0;
+
+  while (position < static_cast<int>(text.length()) && lineCount < maxLines) {
+    while (position < static_cast<int>(text.length()) &&
+           (text[position] == ' ' || text[position] == '\r' || text[position] == '\n')) {
+      position++;
+    }
+
+    if (position >= static_cast<int>(text.length())) {
+      break;
+    }
+
+    int lineStart = position;
+    int lineEnd = min(lineStart + OLED_CHARS_PER_LINE, static_cast<int>(text.length()));
+    int newlineAt = text.indexOf('\n', lineStart);
+
+    if (newlineAt >= lineStart && newlineAt < lineEnd) {
+      lineEnd = newlineAt;
+    } else if (lineEnd < static_cast<int>(text.length()) && text[lineEnd] != ' ') {
+      for (int i = lineEnd - 1; i > lineStart + 2; i--) {
+        if (text[i] == ' ') {
+          lineEnd = i;
+          break;
+        }
+      }
+    }
+
+    lines[lineCount++] = text.substring(lineStart, lineEnd);
+    position = lineEnd;
+  }
+
+  if (position < static_cast<int>(text.length()) && lineCount > 0) {
+    lines[lineCount - 1] = addOledEllipsis(lines[lineCount - 1]);
+  }
+
+  drawOledLines(lines, lineCount);
 }
 
 // ===== Camera init =====
@@ -135,6 +218,7 @@ void handleRoot() {
   html += "<p><a href='/capture'>Browser Capture</a></p>";
   html += "<p><a href='/last'>View Last Touch Capture</a></p>";
   html += "<p>Tap the touch sensor, then open /last.</p>";
+  html += "<p>V0.5: touch capture also posts to the local backend if configured.</p>";
   html += "</body></html>";
 
   server.send(200, "text/html", html);
@@ -176,7 +260,7 @@ void handleCapture() {
 // ===== Touch-triggered capture stored in memory =====
 bool captureAndStoreLatest() {
   Serial.println("Touch capture requested...");
-  showMessage("Capturing...", "Touch trigger");
+  showMessage("Capturing", "Touch");
 
   camera_fb_t* fb = esp_camera_fb_get();
 
@@ -211,9 +295,87 @@ bool captureAndStoreLatest() {
   char sizeText[24];
   snprintf(sizeText, sizeof(sizeText), "%u bytes", static_cast<unsigned>(lastJpegLen));
 
-  showMessage("Saved photo", sizeText, "Open /last");
+  showMessage("Saved", sizeText, "Open /last");
 
   Serial.println("Touch photo saved. Open /last to view it.");
+  return true;
+}
+
+bool backendIsConfigured() {
+  return std::strlen(BACKEND_URL) > 0 && std::strstr(BACKEND_URL, "YOUR_MAC_IP") == nullptr;
+}
+
+String parseBackendText(const String& responseBody) {
+  StaticJsonDocument<384> doc;
+  DeserializationError error = deserializeJson(doc, responseBody);
+
+  if (error) {
+    Serial.print("Backend JSON parse failed: ");
+    Serial.println(error.c_str());
+    return "";
+  }
+
+  const char* text = doc["text"] | "";
+  return String(text);
+}
+
+bool uploadLatestToBackend() {
+  if (lastJpeg == nullptr || lastJpegLen == 0) {
+    Serial.println("No stored JPEG available for backend upload.");
+    showMessage("No photo", "to upload");
+    return false;
+  }
+
+  if (!backendIsConfigured()) {
+    Serial.println("Backend URL is not configured; skipping upload.");
+    showMessage("Saved photo", "Backend", "off");
+    return false;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected; cannot upload.");
+    showMessage("WiFi lost", "Upload", "skip");
+    return false;
+  }
+
+  Serial.print("Uploading latest image to backend: ");
+  Serial.println(BACKEND_URL);
+  showMessage("Uploading", "backend");
+
+  HTTPClient http;
+  http.setTimeout(15000);
+
+  if (!http.begin(BACKEND_URL)) {
+    Serial.println("Failed to start HTTP connection.");
+    showMessage("Upload", "setup fail");
+    return false;
+  }
+
+  http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("Cache-Control", "no-store");
+
+  int statusCode = http.POST(lastJpeg, lastJpegLen);
+  String responseBody = http.getString();
+  http.end();
+
+  Serial.printf("Backend HTTP status: %d\n", statusCode);
+  Serial.print("Backend response: ");
+  Serial.println(responseBody);
+
+  if (statusCode < 200 || statusCode >= 300) {
+    char statusText[16];
+    snprintf(statusText, sizeof(statusText), "HTTP %d", statusCode);
+    showMessage("Upload", "failed", statusText);
+    return false;
+  }
+
+  String responseText = parseBackendText(responseBody);
+
+  if (responseText.length() == 0) {
+    responseText = "Image OK";
+  }
+
+  showWrappedText(responseText, 4);
   return true;
 }
 
@@ -280,6 +442,8 @@ void setup() {
   Serial.println("WiFi connected.");
   Serial.print("Open this URL: http://");
   Serial.println(WiFi.localIP());
+  Serial.print("Backend URL: ");
+  Serial.println(backendIsConfigured() ? BACKEND_URL : "(not configured)");
 
   String ip = WiFi.localIP().toString();
   showMessage("Open URL", ip.c_str());
@@ -301,7 +465,10 @@ void loop() {
   if (touched && !lastTouched && now - lastTouchTime > TOUCH_DEBOUNCE_MS) {
     lastTouchTime = now;
     Serial.println("Touch trigger detected.");
-    captureAndStoreLatest();
+
+    if (captureAndStoreLatest()) {
+      uploadLatestToBackend();
+    }
   }
 
   lastTouched = touched;

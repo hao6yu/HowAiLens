@@ -10,6 +10,12 @@ touch tap -> camera capture -> OLED status -> browser can view JPEG
 The current firmware keeps the proven Arduino IDE behavior, but is now set up as
 a PlatformIO project.
 
+V0.5 adds a local backend upload test:
+
+```text
+touch tap -> camera capture -> POST JPEG to Mac -> OLED shows backend response
+```
+
 ## Hardware
 
 - Seeed Studio XIAO ESP32S3 Sense
@@ -32,10 +38,41 @@ Edit `include/secrets.h` before uploading:
 ```cpp
 #define HAOLENS_WIFI_SSID "YOUR_WIFI_NAME"
 #define HAOLENS_WIFI_PASS "YOUR_WIFI_PASSWORD"
+#define HAOLENS_BACKEND_URL "http://YOUR_MAC_IP:8787/analyze"
 ```
 
 `include/secrets.h` is ignored by git. Use `include/secrets.example.h` as the
 shareable template.
+
+The backend URL must use your Mac's LAN IP address, not `localhost`, because the
+XIAO is a separate device on Wi-Fi.
+
+## Local Backend
+
+Start the local backend before testing V0.5:
+
+```sh
+node tools/local-backend/server.js
+```
+
+The server prints usable URLs such as:
+
+```text
+http://192.168.50.179:8787/analyze
+```
+
+Copy the Wi-Fi/LAN address into `HAOLENS_BACKEND_URL`, upload the firmware, then
+tap the touch sensor. The backend saves the most recent uploaded image here:
+
+```text
+tools/local-backend/uploads/latest.jpg
+```
+
+You can also view it in a browser:
+
+```text
+http://<YOUR_MAC_IP>:8787/latest.jpg
+```
 
 ## PlatformIO Workflow
 
@@ -66,4 +103,5 @@ http://<XIAO_IP>/last
 ```
 
 Tap the touch sensor first, then open `/last` to view the latest touch-triggered
-photo.
+photo. In V0.5, the same touch capture also posts the image to the configured
+local backend.

@@ -19,6 +19,12 @@ touch tap -> camera capture -> POST JPEG to Mac -> OLED shows backend response
 V0.5.1 hardens that loop with backend health checks, clearer OLED states, Wi-Fi
 reconnect handling, and a simple backend browser page.
 
+V0.6 adds AI vision in the backend:
+
+```text
+touch tap -> POST JPEG to Mac -> OpenAI vision -> short OLED-safe response
+```
+
 ## Parts Used
 
 This is currently a desk prototype, not a polished wearable build.
@@ -95,7 +101,30 @@ XIAO is a separate device on Wi-Fi.
 
 ## Local Backend
 
-Start the local backend before testing V0.5.1:
+Use the project Node version:
+
+```sh
+nvm use
+```
+
+Configure the local backend:
+
+```sh
+cp .env.example .env
+```
+
+For V0.6 AI vision, edit `.env` and set:
+
+```text
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_IMAGE_DETAIL=low
+```
+
+If `OPENAI_API_KEY` is empty, the backend stays in mock mode and returns the
+configured `HAOLENS_AI_MOCK_TEXT`.
+
+Start the local backend:
 
 ```sh
 node tools/local-backend/server.js

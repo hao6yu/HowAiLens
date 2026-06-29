@@ -3,13 +3,57 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
+const repoRoot = path.resolve(__dirname, "../..");
+
+loadDotEnv(path.join(repoRoot, ".env"));
+loadDotEnv(path.join(__dirname, ".env"));
+
 const host = "0.0.0.0";
 const port = Number(process.env.HAOLENS_BACKEND_PORT || 8787);
 const maxBytes = Number(process.env.HAOLENS_MAX_UPLOAD_BYTES || 2 * 1024 * 1024);
 const uploadDir = path.join(__dirname, "uploads");
 const latestImagePath = path.join(uploadDir, "latest.jpg");
+const openaiApiKey = process.env.OPENAI_API_KEY || "";
+const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+const openaiImageDetail = process.env.OPENAI_IMAGE_DETAIL || "low";
+const openaiTimeoutMs = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
+const oledMaxChars = Number(process.env.HAOLENS_OLED_MAX_CHARS || 32);
+const mockText = process.env.HAOLENS_AI_MOCK_TEXT || "AI off";
 
 fs.mkdirSync(uploadDir, { recursive: true });
+
+function loadDotEnv(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const equalsIndex = trimmed.indexOf("=");
+
+    if (equalsIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, equalsIndex).trim();
+    let value = trimmed.slice(equalsIndex + 1).trim();
+
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
+      process.env[key] = value;
+    }
+  }
+}
 
 function localAddresses() {
   const interfaces = os.networkInterfaces();
@@ -68,10 +112,159 @@ function handleHealth(req, res) {
   sendJson(res, 200, {
     ok: true,
     service: "haolens-local-backend",
-    version: "0.5.1",
+    version: "0.6.0",
     maxUploadBytes: maxBytes,
+    ai: openaiStatus(),
     latestImage: latestImageInfo(),
   });
+}
+
+function openaiStatus() {
+  return {
+    configured: openaiApiKey.length > 0,
+    model: openaiModel,
+    imageDetail: openaiImageDetail,
+    timeoutMs: openaiTimeoutMs,
+    oledMaxChars,
+    mode: openaiApiKey.length > 0 ? "openai" : "mock",
+  };
+}
+
+function cleanOledText(text) {
+  const cleaned = String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+
+  if (!cleaned) {
+    return "Not sure";
+  }
+
+  if (cleaned.length <= oledMaxChars) {
+    return cleaned;
+  }
+
+  return `${cleaned.slice(0, Math.max(0, oledMaxChars - 3)).trim()}...`;
+}
+
+function extractResponseText(response) {
+  if (typeof response.output_text === "string") {
+    return response.output_text;
+  }
+
+  const parts = [];
+
+  for (const item of response.output || []) {
+    for (const content of item.content || []) {
+      if (typeof content.text === "string") {
+        parts.push(content.text);
+      }
+    }
+  }
+
+  return parts.join(" ");
+}
+
+function postJson(url, headers, body, timeoutMs) {
+  if (typeof fetch !== "function") {
+    throw new Error("OpenAI mode requires Node 18 or newer. Run `nvm use` first.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal: controller.signal,
+  })
+    .then(async (response) => ({
+      statusCode: response.status,
+      body: await response.text(),
+    }))
+    .catch((error) => {
+      if (error.name === "AbortError") {
+        throw new Error("OpenAI request timed out");
+      }
+
+      throw error;
+    })
+    .finally(() => {
+      clearTimeout(timeout);
+    });
+}
+
+async function analyzeImageWithOpenAI(image) {
+  if (!openaiApiKey) {
+    return {
+      ok: false,
+      text: cleanOledText(mockText),
+      mode: "mock",
+      error: "OPENAI_API_KEY is not configured",
+    };
+  }
+
+  const base64Image = image.toString("base64");
+  const prompt = [
+    "Describe this image for a tiny 64x48 OLED display.",
+    `Return one short concrete phrase, maximum ${oledMaxChars} characters.`,
+    "Use simple words. No full sentence. No markdown.",
+    "If unclear, return exactly: Not sure",
+  ].join(" ");
+
+  const requestBody = {
+    model: openaiModel,
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          {
+            type: "input_image",
+            image_url: `data:image/jpeg;base64,${base64Image}`,
+            detail: openaiImageDetail,
+          },
+        ],
+      },
+    ],
+    max_output_tokens: 40,
+    store: false,
+  };
+
+  const response = await postJson(
+    "https://api.openai.com/v1/responses",
+    {
+      Authorization: `Bearer ${openaiApiKey}`,
+    },
+    requestBody,
+    openaiTimeoutMs
+  );
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(response.body);
+  } catch (error) {
+    throw new Error(`OpenAI returned non-JSON response: HTTP ${response.statusCode}`);
+  }
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    const message = parsed.error && parsed.error.message ? parsed.error.message : response.body;
+    throw new Error(`OpenAI HTTP ${response.statusCode}: ${message}`);
+  }
+
+  return {
+    ok: true,
+    text: cleanOledText(extractResponseText(parsed)),
+    mode: "openai",
+    model: openaiModel,
+    imageDetail: openaiImageDetail,
+    usage: parsed.usage || null,
+  };
 }
 
 function handleAnalyze(req, res) {
@@ -101,7 +294,7 @@ function handleAnalyze(req, res) {
     chunks.push(chunk);
   });
 
-  req.on("end", () => {
+  req.on("end", async () => {
     if (rejected) {
       return;
     }
@@ -121,11 +314,26 @@ function handleAnalyze(req, res) {
 
     console.log(`Saved ${image.length} bytes to ${latestImagePath}`);
 
+    let analysis;
+
+    try {
+      analysis = await analyzeImageWithOpenAI(image);
+    } catch (error) {
+      console.error("OpenAI analyze failed:", error.message);
+      analysis = {
+        ok: false,
+        text: "AI failed",
+        mode: "openai",
+        error: error.message,
+      };
+    }
+
     sendJson(res, 200, {
-      ok: true,
-      text: "Image OK",
+      ok: analysis.ok,
+      text: analysis.text,
       bytes: image.length,
       savedAs: latestImagePath,
+      ai: analysis,
     });
   });
 
@@ -159,6 +367,13 @@ function handleHome(req, res) {
     ? `<p><a href="/latest.jpg">latest.jpg</a> (${latest.size} bytes, ${latest.updatedAt})</p>
        <img src="/latest.jpg?t=${cacheBust}" alt="Latest HaoLens upload" style="max-width: min(100%, 720px); border: 1px solid #ccc;">`
     : "<p>No image uploaded yet.</p>";
+  const ai = openaiStatus();
+  const aiHtml = ai.configured
+    ? `<p>Mode: <strong>OpenAI</strong></p>
+       <p>Model: <code>${ai.model}</code></p>
+       <p>Image detail: <code>${ai.imageDetail}</code></p>`
+    : `<p>Mode: <strong>Mock</strong></p>
+       <p>Add <code>OPENAI_API_KEY</code> to <code>.env</code> to enable AI vision.</p>`;
 
   const body = `<!doctype html>
 <html>
@@ -182,6 +397,9 @@ function handleHome(req, res) {
 
   <h2>Health</h2>
   <ul>${healthUrls.map((url) => `<li><a href="${url}">${url}</a></li>`).join("")}</ul>
+
+  <h2>AI</h2>
+  ${aiHtml}
 
   <h2>Latest Upload</h2>
   ${latestHtml}
@@ -223,6 +441,10 @@ const server = http.createServer((req, res) => {
 server.listen(port, host, () => {
   console.log(`HaoLens local backend listening on http://localhost:${port}`);
   console.log(`Health check: http://localhost:${port}/health`);
+  console.log(`AI mode: ${openaiApiKey ? "OpenAI" : "mock"} (${openaiModel}, detail=${openaiImageDetail})`);
+  if (openaiApiKey && typeof fetch !== "function") {
+    console.warn("OpenAI mode needs Node 18 or newer. Run `nvm use` before starting the backend.");
+  }
   for (const address of localAddresses()) {
     console.log(`Use in firmware: http://${address}:${port}/analyze`);
   }

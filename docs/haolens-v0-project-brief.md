@@ -41,6 +41,33 @@ Firmware retries Wi-Fi reconnects
 OLED states are shorter and clearer
 ```
 
+Current V0.6 goal:
+
+```text
+Touch sensor tap
+→ XIAO camera captures photo
+→ XIAO POSTs JPEG to local backend
+→ backend calls OpenAI vision
+→ backend returns a short OLED-safe phrase
+→ OLED displays the AI result
+```
+
+V0.6 keeps OpenAI/API-key logic entirely in the local backend. The XIAO firmware
+continues to receive the same JSON shape:
+
+```json
+{ "text": "short result" }
+```
+
+Default V0.6 backend model:
+
+```text
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_IMAGE_DETAIL=low
+```
+
+If no `OPENAI_API_KEY` is configured, the backend stays in mock mode.
+
 ---
 
 ## Current hardware
@@ -523,6 +550,7 @@ Then replace backend response with AI vision result.
 Current local backend command:
 
 ```sh
+nvm use
 node tools/local-backend/server.js
 ```
 
@@ -543,6 +571,14 @@ The firmware backend URL lives in local-only `include/secrets.h`:
 
 Use the Mac's LAN IP address printed by the backend. Do not use `localhost`,
 because the XIAO runs on a separate device.
+
+The OpenAI API key lives in local-only `.env`:
+
+```text
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_IMAGE_DETAIL=low
+```
 
 ---
 
@@ -704,6 +740,7 @@ V0 hardware proof is working.
 PlatformIO migration is working.
 V0.5 local backend upload loop is working.
 V0.5.1 local loop hardening is working in firmware build.
+V0.6 backend AI vision is being added.
 ```
 
 Completed:
@@ -727,7 +764,6 @@ Wi-Fi reconnect handling
 Next:
 
 ```text
-Add AI vision response after upload loop is stable
-Display AI result on OLED
+Test V0.6 with a real OpenAI API key
 Improve wearable packaging and power
 ```

@@ -36,8 +36,16 @@ const char* BACKEND_URL = HAOLENS_BACKEND_URL;
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-constexpr uint8_t OLED_CHARS_PER_LINE = 12;
-constexpr uint8_t OLED_MAX_LINES = 3;
+#ifndef HAOLENS_OLED_CHARS_PER_LINE
+#define HAOLENS_OLED_CHARS_PER_LINE 11
+#endif
+
+#ifndef HAOLENS_OLED_MAX_LINES
+#define HAOLENS_OLED_MAX_LINES 3
+#endif
+
+constexpr uint8_t OLED_CHARS_PER_LINE = HAOLENS_OLED_CHARS_PER_LINE;
+constexpr uint8_t OLED_MAX_LINES = HAOLENS_OLED_MAX_LINES;
 
 // ===== Touch sensor =====
 // TTP223 OUT/SIG -> XIAO D2

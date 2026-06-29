@@ -89,8 +89,11 @@ Current wiring is documented in
 `docs/haolens-v0-project-brief.md`.
 
 OLED note: the display is tiny. In the current firmware/backend contract, assume
-up to 12 short characters per line and design status/AI text as short phrases,
+up to 11 short characters per line and design status/AI text as short phrases,
 not paragraphs.
+
+Firmware OLED limits live in `platformio.ini` build flags. Backend AI text
+shaping uses `.env`. Keep both set to the same line shape for this display.
 
 ## Configure Wi-Fi
 
@@ -128,9 +131,12 @@ For AI vision, edit `.env` and set:
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
-HAOLENS_OLED_LINE_CHARS=12
+HAOLENS_OLED_LINE_CHARS=11
 HAOLENS_OLED_MAX_LINES=3
 ```
+
+These backend OLED values should match the firmware build flags in
+`platformio.ini`.
 
 If `OPENAI_API_KEY` is empty, the backend stays in mock mode and returns the
 configured `HAOLENS_AI_MOCK_TEXT`.
@@ -198,6 +204,9 @@ From a terminal, this machine currently has PlatformIO here:
 ```
 
 Serial monitor speed is `115200`.
+
+For start/stop/restart commands for the backend and XIAO frontend, see
+[docs/howailens-service-ops.md](docs/howailens-service-ops.md).
 
 ## Browser Routes
 

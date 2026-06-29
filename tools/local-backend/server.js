@@ -17,7 +17,7 @@ const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const openaiImageDetail = process.env.OPENAI_IMAGE_DETAIL || "low";
 const openaiTimeoutMs = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
-const oledLineChars = positiveInteger(process.env.HAOLENS_OLED_LINE_CHARS, 12);
+const oledLineChars = positiveInteger(process.env.HAOLENS_OLED_LINE_CHARS, 11);
 const oledMaxLines = positiveInteger(process.env.HAOLENS_OLED_MAX_LINES, 3);
 const mockText = process.env.HAOLENS_AI_MOCK_TEXT || "AI off";
 let lastAnalysis = null;
@@ -300,14 +300,14 @@ async function analyzeImageWithOpenAI(image) {
   const lineInstruction =
     oledMaxLines === 1
       ? `Return exactly one line, ${oledLineChars} characters or fewer.`
-      : `Return 1 to ${oledMaxLines} lines. Each line must be ${oledLineChars} characters or fewer.`;
+      : `Return exactly ${oledMaxLines} lines when the image is clear. Each line must be ${oledLineChars} characters or fewer.`;
   const prompt = [
     "Describe this image for a tiny 64x48 OLED display.",
     lineInstruction,
-    "Use short concrete words. Put location on another line if useful.",
+    "Use one short concrete phrase per line.",
     "No markdown. No punctuation.",
     "Return only the display text.",
-    "Good examples: Cable\\nfloor | Red mug | Open door",
+    "Good example: Cable\\nbeside\\nwall",
     "If unclear, return exactly: Not sure",
   ].join(" ");
 

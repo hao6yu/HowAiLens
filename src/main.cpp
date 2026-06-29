@@ -36,7 +36,7 @@ const char* BACKEND_URL = HAOLENS_BACKEND_URL;
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-constexpr uint8_t OLED_CHARS_PER_LINE = 10;
+constexpr uint8_t OLED_CHARS_PER_LINE = 12;
 constexpr uint8_t OLED_MAX_LINES = 3;
 
 // ===== Touch sensor =====
@@ -548,7 +548,7 @@ bool uploadLatestToBackend() {
     backendAvailable = checkBackendHealth(true);
 
     if (!backendAvailable) {
-      lastUploadStatus = "backend offline";
+      lastUploadStatus = "backend Service offline";
       showMessage("Backend", "offline");
       return false;
     }

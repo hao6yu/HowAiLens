@@ -76,7 +76,7 @@ Current V0.7 goal:
 ```text
 Shape AI result for the 64x48 OLED
 → max 3 readable lines
-→ max 10 characters per line
+→ max 12 characters per line
 → preserve line breaks on firmware
 → show last AI result on XIAO root page
 → expose backend /last-analysis debug route
@@ -600,7 +600,7 @@ The OpenAI API key lives in local-only `.env`:
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
-HAOLENS_OLED_LINE_CHARS=10
+HAOLENS_OLED_LINE_CHARS=12
 HAOLENS_OLED_MAX_LINES=3
 ```
 
@@ -639,7 +639,7 @@ Because the OLED is only 64x48, responses must be short.
 - Very small screen
 - Good for short status/result text only
 - Not suitable for long AI responses
-- At the current default font size, the display fits roughly 10 characters per line
+- Current firmware/backend contract allows up to 12 short characters per line
 - Although 64x48 pixels can physically fit about 6 tiny text rows, practical UI should use fewer rows for readability
 - AI responses should be compressed to up to three short display lines
 - Firmware should avoid sending long paragraphs directly to the OLED

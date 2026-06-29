@@ -17,8 +17,8 @@ const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const openaiImageDetail = process.env.OPENAI_IMAGE_DETAIL || "low";
 const openaiTimeoutMs = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
-const oledLineChars = Number(process.env.HAOLENS_OLED_LINE_CHARS || 10);
-const oledMaxLines = Number(process.env.HAOLENS_OLED_MAX_LINES || 3);
+const oledLineChars = positiveInteger(process.env.HAOLENS_OLED_LINE_CHARS, 12);
+const oledMaxLines = positiveInteger(process.env.HAOLENS_OLED_MAX_LINES, 3);
 const mockText = process.env.HAOLENS_AI_MOCK_TEXT || "AI off";
 let lastAnalysis = null;
 
@@ -133,6 +133,16 @@ function openaiStatus() {
   };
 }
 
+function positiveInteger(value, fallback) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
 function sanitizeWord(word) {
   const cleaned = word
     .replace(/^[-*•"'`]+/, "")
@@ -158,15 +168,17 @@ function cleanOledText(text) {
     return "Not sure";
   }
 
-  if (oledMaxLines === 1) {
-    return wrapWords(words, 1).join("\n");
-  }
-
   if (raw.includes("\n")) {
     const lines = [];
 
     for (const rawLine of raw.split(/\n+/)) {
-      const wrappedLines = wrapWords(wordsFromLine(rawLine), oledMaxLines - lines.length);
+      const remainingLines = oledMaxLines - lines.length;
+
+      if (remainingLines <= 0) {
+        break;
+      }
+
+      const wrappedLines = wrapWords(wordsFromLine(rawLine), remainingLines);
       lines.push(...wrappedLines);
 
       if (lines.length >= oledMaxLines) {
@@ -176,16 +188,6 @@ function cleanOledText(text) {
 
     if (lines.length > 0) {
       return lines.slice(0, oledMaxLines).join("\n");
-    }
-  }
-
-  if (!raw.includes("\n") && oledMaxLines === 2) {
-    const firstLine = takeWordsFromStart(words);
-    const consumedWords = firstLine ? firstLine.split(/\s+/).length : 0;
-
-    if (consumedWords < words.length) {
-      const lastLine = trimLeadingArticle(takeWordsFromEnd(words.slice(consumedWords)));
-      return [firstLine, lastLine].filter(Boolean).slice(0, oledMaxLines).join("\n");
     }
   }
 
@@ -200,6 +202,10 @@ function wordsFromLine(line) {
 }
 
 function wrapWords(words, maxLines) {
+  if (maxLines <= 0) {
+    return [];
+  }
+
   const lines = [];
   let currentLine = "";
 
@@ -227,50 +233,6 @@ function wrapWords(words, maxLines) {
   }
 
   return lines.slice(0, maxLines);
-}
-
-function takeWordsFromStart(words) {
-  let line = "";
-
-  for (const word of words) {
-    if (!line) {
-      line = word;
-      continue;
-    }
-
-    if (line.length + 1 + word.length > oledLineChars) {
-      break;
-    }
-
-    line += ` ${word}`;
-  }
-
-  return line;
-}
-
-function takeWordsFromEnd(words) {
-  let line = "";
-
-  for (let i = words.length - 1; i >= 0; i--) {
-    const word = words[i];
-
-    if (!line) {
-      line = word;
-      continue;
-    }
-
-    if (word.length + 1 + line.length > oledLineChars) {
-      break;
-    }
-
-    line = `${word} ${line}`;
-  }
-
-  return line;
-}
-
-function trimLeadingArticle(line) {
-  return line.replace(/^(a|an|the)\s+/i, "").trim();
 }
 
 function extractResponseText(response) {

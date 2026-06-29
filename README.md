@@ -28,7 +28,7 @@ touch tap -> POST JPEG to Mac -> OpenAI vision -> short OLED-safe response
 V0.7 shapes AI responses for the tiny OLED:
 
 ```text
-max 3 lines -> max 10 chars per line
+max 3 lines -> max 12 chars per line
 ```
 
 ## Parts Used
@@ -85,9 +85,9 @@ Planned but not part of the current build:
 Current wiring is documented in
 `docs/haolens-v0-project-brief.md`.
 
-OLED note: the display is tiny. At the current default font size, assume roughly
-10 characters per line and design status/AI text as short phrases, not
-paragraphs.
+OLED note: the display is tiny. In the current firmware/backend contract, assume
+up to 12 short characters per line and design status/AI text as short phrases,
+not paragraphs.
 
 ## Configure Wi-Fi
 
@@ -125,7 +125,7 @@ For AI vision, edit `.env` and set:
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
-HAOLENS_OLED_LINE_CHARS=10
+HAOLENS_OLED_LINE_CHARS=12
 HAOLENS_OLED_MAX_LINES=3
 ```
 

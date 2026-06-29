@@ -84,6 +84,8 @@ interface. Amazon listing/ASIN: `B0FGD4D4MS`.
 
 Planned but not part of the current build:
 
+- MAX98357A I2S amplifier, ordered for future audio output testing
+- Dayton BCE-1 bone conduction exciter, ordered for future audio output testing
 - 3.7V LiPo battery
 - Physical power switch
 - Dedicated power-management parts

@@ -198,13 +198,24 @@ Speaking near the XIAO produces transcript text in the portal.
 - Relay Ruby assistant audio from Realtime to the portal.
 - Play Ruby audio in browser.
 - Show user transcript, assistant transcript, and status events.
-- Keep device audio output out of scope.
+- Keep device audio output out of scope until the MAX98357A/BCE-1 phase.
 
 Success:
 
 ```text
 XIAO is microphone input. Browser is Ruby audio output.
 ```
+
+### Future Device Audio Output Phase
+
+Planned hardware:
+
+- MAX98357A I2S amplifier
+- Dayton BCE-1 bone conduction exciter
+
+This phase should happen after the device microphone stream and portal playback
+are stable. It should prove Ruby audio playback from the device for live voice
+chat or live translation style interactions.
 
 ### V0.8.4 Device Photo Tool
 
@@ -252,7 +263,7 @@ Watch for:
 Acceptable for POC:
 
 - touch/button/manual portal action instead of wake word
-- browser audio output instead of device audio output
+- browser audio output before the dedicated device audio-output phase
 - brief audio pause during photo capture
 - local LAN only
 - simple device pairing or no auth
@@ -261,7 +272,8 @@ Out of scope for this phase:
 
 - production security
 - on-device wake word
-- on-device speaker or Bluetooth headset audio
+- on-device speaker or bone-conduction audio before the MAX98357A/BCE-1 phase
+- Bluetooth headset audio
 - battery/power optimization
 - polished wearable enclosure
 - full Realtime v2 migration work inside IMSAIGateway

@@ -97,6 +97,31 @@ Goal: let Ruby request photos from the active HowAILens device.
 - Gateway injects photo analysis into Ruby's active session.
 - Portal shows the photo and analysis.
 
+### V0.11 On-Device Audio Output POC
+
+Goal: prove Ruby can speak back through the wearable device.
+
+Planned parts:
+
+- MAX98357A I2S amplifier
+- Dayton BCE-1 bone conduction exciter
+
+Scope:
+
+- Add I2S audio output wiring and firmware support.
+- Receive assistant audio from IMSAIGateway.
+- Buffer and play short Ruby responses through the bone conduction exciter.
+- Keep browser audio playback as the fallback/debug output.
+- Test voice chat and live translation style interactions.
+
+Primary risks:
+
+- output volume and intelligibility
+- power draw
+- enclosure/mounting vibration
+- audio buffering and latency
+- microphone echo or feedback if listening while playing
+
 ## V1 Target Demo
 
 Goal: field work request creation through Ruby.
@@ -129,7 +154,7 @@ Hardware:
 - physical switch
 - wearable frame
 - shorter soldered wiring
-- possible speaker, amplifier, or bone-conduction output
+- MAX98357A and Dayton BCE-1 mounting/wiring refinement
 
 Device UX:
 
@@ -159,7 +184,7 @@ Production hardening:
 
 - production security
 - always-on wake word
-- on-device Ruby audio playback
+- on-device Ruby audio playback before the MAX98357A/BCE-1 output phase
 - Bluetooth headset integration
 - long-form text display on the OLED
 - local AI inference on the ESP32S3

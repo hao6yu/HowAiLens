@@ -31,8 +31,11 @@ touch tap -> POST JPEG to Mac -> OpenAI vision -> short OLED-safe response
 V0.7 shapes AI responses for the tiny OLED:
 
 ```text
-max 3 lines -> max 12 chars per line
+max 3 lines -> max 11 chars per line
 ```
+
+Future IMSAIGateway realtime-agent planning is captured in
+[docs/howailens-imsaigateway-realtime-plan.md](docs/howailens-imsaigateway-realtime-plan.md).
 
 ## Parts Used
 

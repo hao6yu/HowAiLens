@@ -154,6 +154,13 @@ http://<YOUR_MAC_IP>:8787/health
 Firmware checks `/health` on boot and before upload if the backend was not
 already marked available.
 
+`POST /analyze` intentionally returns compact JSON so the ESP32 can parse it
+with a small memory budget:
+
+```json
+{ "text": "short OLED result" }
+```
+
 ## PlatformIO Workflow
 
 From VS Code, use the PlatformIO sidebar:

@@ -328,12 +328,17 @@ function handleAnalyze(req, res) {
       };
     }
 
+    console.log(`Analysis result: ${analysis.text}`);
+    if (analysis.usage) {
+      console.log(`OpenAI tokens: ${JSON.stringify(analysis.usage)}`);
+    }
+
     sendJson(res, 200, {
       ok: analysis.ok,
       text: analysis.text,
       bytes: image.length,
-      savedAs: latestImagePath,
-      ai: analysis,
+      mode: analysis.mode,
+      model: analysis.model || openaiModel,
     });
   });
 

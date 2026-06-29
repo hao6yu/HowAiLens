@@ -59,6 +59,9 @@ continues to receive the same JSON shape:
 { "text": "short result" }
 ```
 
+The backend intentionally keeps the `/analyze` response compact for ESP32 memory.
+Verbose OpenAI metadata should stay in backend logs, not in the firmware response.
+
 Default V0.6 backend model:
 
 ```text
@@ -740,7 +743,7 @@ V0 hardware proof is working.
 PlatformIO migration is working.
 V0.5 local backend upload loop is working.
 V0.5.1 local loop hardening is working in firmware build.
-V0.6 backend AI vision is being added.
+V0.6 backend AI vision is working with OpenAI.
 ```
 
 Completed:
@@ -764,6 +767,5 @@ Wi-Fi reconnect handling
 Next:
 
 ```text
-Test V0.6 with a real OpenAI API key
 Improve wearable packaging and power
 ```

@@ -71,6 +71,24 @@ OPENAI_IMAGE_DETAIL=low
 
 If no `OPENAI_API_KEY` is configured, the backend stays in mock mode.
 
+Current V0.7 goal:
+
+```text
+Shape AI result for the 64x48 OLED
+→ max 2 lines
+→ max 10 characters per line
+→ preserve line breaks on firmware
+→ show last AI result on XIAO root page
+→ expose backend /last-analysis debug route
+```
+
+Example V0.7 display result:
+
+```text
+Cable
+near wall
+```
+
 ---
 
 ## Current hardware
@@ -564,6 +582,7 @@ Useful local backend routes:
 /health    = JSON health check
 /analyze   = POST JPEG endpoint
 /latest.jpg = latest uploaded image
+/last-analysis = latest AI result, latency, usage, and error info
 ```
 
 The firmware backend URL lives in local-only `include/secrets.h`:
@@ -581,6 +600,8 @@ The OpenAI API key lives in local-only `.env`:
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
+HAOLENS_OLED_LINE_CHARS=10
+HAOLENS_OLED_MAX_LINES=2
 ```
 
 ---
@@ -744,6 +765,7 @@ PlatformIO migration is working.
 V0.5 local backend upload loop is working.
 V0.5.1 local loop hardening is working in firmware build.
 V0.6 backend AI vision is working with OpenAI.
+V0.7 OLED-safe AI response shaping is working on hardware.
 ```
 
 Completed:
@@ -762,6 +784,10 @@ V0.0 git tag
 Local backend upload test
 Backend health/page routes
 Wi-Fi reconnect handling
+OpenAI vision backend
+Compact OLED-safe firmware response
+OLED-shaped AI response lines
+XIAO root-page capture and AI status
 ```
 
 Next:

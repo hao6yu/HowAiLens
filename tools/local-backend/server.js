@@ -17,8 +17,10 @@ const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const openaiImageDetail = process.env.OPENAI_IMAGE_DETAIL || "low";
 const openaiTimeoutMs = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
-const oledMaxChars = Number(process.env.HAOLENS_OLED_MAX_CHARS || 32);
+const oledLineChars = Number(process.env.HAOLENS_OLED_LINE_CHARS || 10);
+const oledMaxLines = Number(process.env.HAOLENS_OLED_MAX_LINES || 2);
 const mockText = process.env.HAOLENS_AI_MOCK_TEXT || "AI off";
+let lastAnalysis = null;
 
 fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -112,7 +114,7 @@ function handleHealth(req, res) {
   sendJson(res, 200, {
     ok: true,
     service: "haolens-local-backend",
-    version: "0.6.0",
+    version: "0.7.0",
     maxUploadBytes: maxBytes,
     ai: openaiStatus(),
     latestImage: latestImageInfo(),
@@ -125,26 +127,146 @@ function openaiStatus() {
     model: openaiModel,
     imageDetail: openaiImageDetail,
     timeoutMs: openaiTimeoutMs,
-    oledMaxChars,
+    oledLineChars,
+    oledMaxLines,
     mode: openaiApiKey.length > 0 ? "openai" : "mock",
   };
 }
 
-function cleanOledText(text) {
-  const cleaned = String(text || "")
-    .replace(/\s+/g, " ")
-    .replace(/^["'`]+|["'`]+$/g, "")
+function sanitizeWord(word) {
+  const cleaned = word
+    .replace(/^[-*•"'`]+/, "")
+    .replace(/["'`.,!?;:]+$/g, "")
     .trim();
 
-  if (!cleaned) {
-    return "Not sure";
-  }
-
-  if (cleaned.length <= oledMaxChars) {
+  if (cleaned.length <= oledLineChars) {
     return cleaned;
   }
 
-  return `${cleaned.slice(0, Math.max(0, oledMaxChars - 3)).trim()}...`;
+  return cleaned.slice(0, oledLineChars);
+}
+
+function cleanOledText(text) {
+  const raw = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+
+  const words = wordsFromLine(raw);
+
+  if (words.length === 0) {
+    return "Not sure";
+  }
+
+  if (raw.includes("\n")) {
+    const lines = [];
+
+    for (const rawLine of raw.split(/\n+/)) {
+      const wrappedLines = wrapWords(wordsFromLine(rawLine), oledMaxLines - lines.length);
+      lines.push(...wrappedLines);
+
+      if (lines.length >= oledMaxLines) {
+        break;
+      }
+    }
+
+    if (lines.length > 0) {
+      return lines.slice(0, oledMaxLines).join("\n");
+    }
+  }
+
+  if (!raw.includes("\n") && oledMaxLines >= 2) {
+    const firstLine = takeWordsFromStart(words);
+    const consumedWords = firstLine ? firstLine.split(/\s+/).length : 0;
+
+    if (consumedWords < words.length) {
+      const lastLine = trimLeadingArticle(takeWordsFromEnd(words.slice(consumedWords)));
+      return [firstLine, lastLine].filter(Boolean).slice(0, oledMaxLines).join("\n");
+    }
+  }
+
+  return wrapWords(words, oledMaxLines).join("\n");
+}
+
+function wordsFromLine(line) {
+  return String(line || "")
+    .split(/\s+/)
+    .map(sanitizeWord)
+    .filter(Boolean);
+}
+
+function wrapWords(words, maxLines) {
+  const lines = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+      continue;
+    }
+
+    if (currentLine.length + 1 + word.length <= oledLineChars) {
+      currentLine += ` ${word}`;
+      continue;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+
+    if (lines.length >= maxLines) {
+      break;
+    }
+  }
+
+  if (lines.length < maxLines && currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.slice(0, maxLines);
+}
+
+function takeWordsFromStart(words) {
+  let line = "";
+
+  for (const word of words) {
+    if (!line) {
+      line = word;
+      continue;
+    }
+
+    if (line.length + 1 + word.length > oledLineChars) {
+      break;
+    }
+
+    line += ` ${word}`;
+  }
+
+  return line;
+}
+
+function takeWordsFromEnd(words) {
+  let line = "";
+
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i];
+
+    if (!line) {
+      line = word;
+      continue;
+    }
+
+    if (word.length + 1 + line.length > oledLineChars) {
+      break;
+    }
+
+    line = `${word} ${line}`;
+  }
+
+  return line;
+}
+
+function trimLeadingArticle(line) {
+  return line.replace(/^(a|an|the)\s+/i, "").trim();
 }
 
 function extractResponseText(response) {
@@ -211,8 +333,11 @@ async function analyzeImageWithOpenAI(image) {
   const base64Image = image.toString("base64");
   const prompt = [
     "Describe this image for a tiny 64x48 OLED display.",
-    `Return one short concrete phrase, maximum ${oledMaxChars} characters.`,
-    "Use simple words. No full sentence. No markdown.",
+    `Return 1 or 2 lines. Each line must be ${oledLineChars} characters or fewer.`,
+    "Prefer two short lines over one cramped phrase.",
+    "Use simple concrete words. No markdown. No punctuation unless needed.",
+    "Return only the display text.",
+    "Good examples: Cable\\nnear wall | Red mug | Open door",
     "If unclear, return exactly: Not sure",
   ].join(" ");
 
@@ -271,6 +396,7 @@ function handleAnalyze(req, res) {
   const chunks = [];
   let totalBytes = 0;
   let rejected = false;
+  const startTime = Date.now();
 
   req.on("data", (chunk) => {
     if (rejected) {
@@ -333,6 +459,19 @@ function handleAnalyze(req, res) {
       console.log(`OpenAI tokens: ${JSON.stringify(analysis.usage)}`);
     }
 
+    lastAnalysis = {
+      ok: analysis.ok,
+      text: analysis.text,
+      bytes: image.length,
+      mode: analysis.mode,
+      model: analysis.model || openaiModel,
+      imageDetail: analysis.imageDetail || openaiImageDetail,
+      usage: analysis.usage || null,
+      error: analysis.error || null,
+      latencyMs: Date.now() - startTime,
+      updatedAt: new Date().toISOString(),
+    };
+
     sendJson(res, 200, {
       ok: analysis.ok,
       text: analysis.text,
@@ -345,6 +484,19 @@ function handleAnalyze(req, res) {
   req.on("error", (error) => {
     console.error("Request error:", error.message);
   });
+}
+
+function handleLastAnalysis(req, res) {
+  if (!lastAnalysis) {
+    sendJson(res, 404, {
+      ok: false,
+      text: "No result",
+      error: "No analysis has run yet",
+    });
+    return;
+  }
+
+  sendJson(res, 200, lastAnalysis);
 }
 
 function handleLatest(req, res) {
@@ -376,9 +528,15 @@ function handleHome(req, res) {
   const aiHtml = ai.configured
     ? `<p>Mode: <strong>OpenAI</strong></p>
        <p>Model: <code>${ai.model}</code></p>
-       <p>Image detail: <code>${ai.imageDetail}</code></p>`
+       <p>Image detail: <code>${ai.imageDetail}</code></p>
+       <p>OLED shape: <code>${ai.oledMaxLines} lines x ${ai.oledLineChars} chars</code></p>`
     : `<p>Mode: <strong>Mock</strong></p>
        <p>Add <code>OPENAI_API_KEY</code> to <code>.env</code> to enable AI vision.</p>`;
+  const analysisHtml = lastAnalysis
+    ? `<p>Last result:</p>
+       <pre>${escapeHtml(lastAnalysis.text)}</pre>
+       <p>${lastAnalysis.model}, ${lastAnalysis.latencyMs} ms, ${lastAnalysis.updatedAt}</p>`
+    : "<p>No analysis yet.</p>";
 
   const body = `<!doctype html>
 <html>
@@ -406,6 +564,9 @@ function handleHome(req, res) {
   <h2>AI</h2>
   ${aiHtml}
 
+  <h2>Last Analysis</h2>
+  ${analysisHtml}
+
   <h2>Latest Upload</h2>
   ${latestHtml}
 </body>
@@ -419,6 +580,14 @@ function handleHome(req, res) {
   res.end(body);
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/analyze") {
     handleAnalyze(req, res);
@@ -427,6 +596,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && req.url === "/health") {
     handleHealth(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/last-analysis") {
+    handleLastAnalysis(req, res);
     return;
   }
 

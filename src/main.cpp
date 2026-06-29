@@ -68,6 +68,10 @@ WebServer server(80);
 // ===== Latest touch-captured image stored in PSRAM =====
 uint8_t* lastJpeg = nullptr;
 size_t lastJpegLen = 0;
+String lastAiText = "";
+String lastUploadStatus = "none";
+int lastBackendStatusCode = 0;
+unsigned long lastResultTime = 0;
 
 // ===== Touch debounce =====
 bool lastTouched = false;
@@ -172,6 +176,19 @@ void showWrappedText(const String& text, uint8_t maxLines = OLED_MAX_LINES) {
   drawOledLines(lines, lineCount);
 }
 
+void appendHtmlEscaped(String& html, const String& value) {
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value[i];
+
+    if (c == '&') html += "&amp;";
+    else if (c == '<') html += "&lt;";
+    else if (c == '>') html += "&gt;";
+    else if (c == '"') html += "&quot;";
+    else if (c == '\n') html += "<br>";
+    else html += c;
+  }
+}
+
 // ===== Camera init =====
 bool initCamera() {
   camera_config_t config;
@@ -229,10 +246,29 @@ void handleRoot() {
   html += "<p><a href='/capture'>Browser Capture</a></p>";
   html += "<p><a href='/last'>View Last Touch Capture</a></p>";
   html += "<p>Tap the touch sensor, then open /last.</p>";
-  html += "<p>V0.5.1: touch capture also posts to the local backend if configured.</p>";
+  html += "<p>V0.7: touch capture posts to the local AI backend if configured.</p>";
   html += "<p>Backend: ";
   html += backendIsConfigured() ? (backendAvailable ? "OK" : "not reachable") : "off";
   html += "</p>";
+  html += "<p>Last capture: ";
+  html += lastJpegLen > 0 ? String(static_cast<unsigned>(lastJpegLen)) + " bytes" : "none";
+  html += "</p>";
+  html += "<p>Upload: ";
+  appendHtmlEscaped(html, lastUploadStatus);
+  if (lastBackendStatusCode != 0) {
+    html += " (HTTP ";
+    html += String(lastBackendStatusCode);
+    html += ")";
+  }
+  html += "</p>";
+  html += "<p>Last AI:</p><pre>";
+  appendHtmlEscaped(html, lastAiText.length() > 0 ? lastAiText : "none");
+  html += "</pre>";
+  if (lastResultTime > 0) {
+    html += "<p>Result age: ";
+    html += String((millis() - lastResultTime) / 1000);
+    html += " sec</p>";
+  }
   html += "</body></html>";
 
   server.send(200, "text/html", html);
@@ -303,6 +339,7 @@ bool captureAndStoreLatest() {
 
   std::memcpy(lastJpeg, fb->buf, fb->len);
   lastJpegLen = fb->len;
+  lastUploadStatus = "captured";
 
   esp_camera_fb_return(fb);
 
@@ -468,18 +505,21 @@ String parseBackendText(const String& responseBody) {
 bool uploadLatestToBackend() {
   if (lastJpeg == nullptr || lastJpegLen == 0) {
     Serial.println("No stored JPEG available for backend upload.");
+    lastUploadStatus = "no photo";
     showMessage("No photo", "to upload");
     return false;
   }
 
   if (!backendIsConfigured()) {
     Serial.println("Backend URL is not configured; skipping upload.");
+    lastUploadStatus = "backend off";
     showMessage("Saved", "Back off");
     return false;
   }
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi disconnected; cannot upload.");
+    lastUploadStatus = "wifi lost";
     showMessage("WiFi lost", "Upload", "skip");
     return false;
   }
@@ -489,6 +529,7 @@ bool uploadLatestToBackend() {
     backendAvailable = checkBackendHealth(true);
 
     if (!backendAvailable) {
+      lastUploadStatus = "backend offline";
       showMessage("Backend", "offline");
       return false;
     }
@@ -503,6 +544,7 @@ bool uploadLatestToBackend() {
 
   if (!http.begin(BACKEND_URL)) {
     Serial.println("Failed to start HTTP connection.");
+    lastUploadStatus = "setup fail";
     showMessage("Upload", "setup fail");
     return false;
   }
@@ -518,11 +560,13 @@ bool uploadLatestToBackend() {
   Serial.printf("Backend HTTP status: %d\n", statusCode);
   Serial.print("Backend response: ");
   Serial.println(responseBody);
+  lastBackendStatusCode = statusCode;
 
   if (statusCode <= 0) {
     Serial.print("Backend upload error: ");
     Serial.println(errorText);
     backendAvailable = false;
+    lastUploadStatus = "upload failed";
     showMessage("Upload", "failed", "No HTTP");
     return false;
   }
@@ -530,6 +574,7 @@ bool uploadLatestToBackend() {
   if (statusCode < 200 || statusCode >= 300) {
     char statusText[16];
     snprintf(statusText, sizeof(statusText), "HTTP %d", statusCode);
+    lastUploadStatus = "upload failed";
     showMessage("Upload", "failed", statusText);
     return false;
   }
@@ -541,6 +586,9 @@ bool uploadLatestToBackend() {
   }
 
   backendAvailable = true;
+  lastAiText = responseText;
+  lastUploadStatus = "ok";
+  lastResultTime = millis();
   showWrappedText(responseText, 4);
   return true;
 }

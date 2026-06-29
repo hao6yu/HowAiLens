@@ -25,6 +25,12 @@ V0.6 adds AI vision in the backend:
 touch tap -> POST JPEG to Mac -> OpenAI vision -> short OLED-safe response
 ```
 
+V0.7 shapes AI responses for the tiny OLED:
+
+```text
+max 2 lines -> max 10 chars per line
+```
+
 ## Parts Used
 
 This is currently a desk prototype, not a polished wearable build.
@@ -113,12 +119,14 @@ Configure the local backend:
 cp .env.example .env
 ```
 
-For V0.6 AI vision, edit `.env` and set:
+For AI vision, edit `.env` and set:
 
 ```text
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_IMAGE_DETAIL=low
+HAOLENS_OLED_LINE_CHARS=10
+HAOLENS_OLED_MAX_LINES=2
 ```
 
 If `OPENAI_API_KEY` is empty, the backend stays in mock mode and returns the
@@ -149,16 +157,25 @@ You can also view it in a browser:
 http://<YOUR_MAC_IP>:8787/
 http://<YOUR_MAC_IP>:8787/latest.jpg
 http://<YOUR_MAC_IP>:8787/health
+http://<YOUR_MAC_IP>:8787/last-analysis
 ```
 
 Firmware checks `/health` on boot and before upload if the backend was not
 already marked available.
 
 `POST /analyze` intentionally returns compact JSON so the ESP32 can parse it
-with a small memory budget:
+with a small memory budget. The firmware reads the `text` field:
 
 ```json
-{ "text": "short OLED result" }
+{ "ok": true, "text": "short OLED result", "mode": "openai" }
+```
+
+For V0.7, the backend asks the model for 1-2 OLED-ready lines and still
+sanitizes the result before sending it to the board. Example:
+
+```text
+Cable
+near wall
 ```
 
 ## PlatformIO Workflow
@@ -190,5 +207,5 @@ http://<XIAO_IP>/last
 ```
 
 Tap the touch sensor first, then open `/last` to view the latest touch-triggered
-photo. In V0.5.1, the same touch capture also posts the image to the configured
-local backend.
+photo. Open `/` to see firmware status, backend status, last capture size, and
+the last AI result.

@@ -24,6 +24,7 @@ bridge real device audio into Ruby's Realtime session.
 HowAILens firmware now has the V0.8.1 foundation:
 
 - optional IMSAIGateway WebSocket client configuration
+- LAN `ws/http` and hosted-domain `wss/https` gateway modes
 - `device_hello` on connect
 - periodic `status` heartbeat
 - remote `set_oled`

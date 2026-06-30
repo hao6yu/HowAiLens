@@ -165,6 +165,17 @@ the firmware, then watch serial output:
 ```cpp
 #define HAOLENS_GATEWAY_HOST "YOUR_GATEWAY_IP"
 #define HAOLENS_GATEWAY_PORT 8000
+#define HAOLENS_GATEWAY_USE_TLS 0
+#define HAOLENS_GATEWAY_SESSION_ID "default"
+#define HAOLENS_DEVICE_ID "howailens-dev-01"
+```
+
+For the hosted IMSAIGateway domain:
+
+```cpp
+#define HAOLENS_GATEWAY_HOST "ai.imsconsulting.host"
+#define HAOLENS_GATEWAY_PORT 443
+#define HAOLENS_GATEWAY_USE_TLS 1
 #define HAOLENS_GATEWAY_SESSION_ID "default"
 #define HAOLENS_DEVICE_ID "howailens-dev-01"
 ```

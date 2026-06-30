@@ -8,5 +8,7 @@
 // Leave HAOLENS_GATEWAY_HOST empty to keep the gateway WebSocket disabled.
 #define HAOLENS_GATEWAY_HOST ""
 #define HAOLENS_GATEWAY_PORT 8000
+#define HAOLENS_GATEWAY_USE_TLS 0
+#define HAOLENS_GATEWAY_TLS_FINGERPRINT ""
 #define HAOLENS_GATEWAY_SESSION_ID "default"
 #define HAOLENS_DEVICE_ID "howailens-dev-01"

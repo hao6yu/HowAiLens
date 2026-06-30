@@ -136,6 +136,18 @@ To connect the XIAO to the IMSAIGateway V0.8 shell, add these values to
 ```cpp
 #define HAOLENS_GATEWAY_HOST "YOUR_MAC_OR_GATEWAY_IP"
 #define HAOLENS_GATEWAY_PORT 8000
+#define HAOLENS_GATEWAY_USE_TLS 0
+#define HAOLENS_GATEWAY_SESSION_ID "default"
+#define HAOLENS_DEVICE_ID "howailens-dev-01"
+```
+
+For the hosted IMSAIGateway domain, use the host without `https://`, port
+`443`, and TLS enabled:
+
+```cpp
+#define HAOLENS_GATEWAY_HOST "ai.imsconsulting.host"
+#define HAOLENS_GATEWAY_PORT 443
+#define HAOLENS_GATEWAY_USE_TLS 1
 #define HAOLENS_GATEWAY_SESSION_ID "default"
 #define HAOLENS_DEVICE_ID "howailens-dev-01"
 ```
@@ -146,10 +158,22 @@ Then run IMSAIGateway and open:
 http://<GATEWAY_IP>:8000/api/v1/howailens/live
 ```
 
+or, for the hosted domain:
+
+```text
+https://ai.imsconsulting.host/api/v1/howailens/live
+```
+
 The firmware connects to:
 
 ```text
 ws://<GATEWAY_IP>:8000/api/v1/howailens/device/ws?session_id=default
+```
+
+With TLS enabled, it connects to:
+
+```text
+wss://ai.imsconsulting.host/api/v1/howailens/device/ws?session_id=default
 ```
 
 The gateway can send `set_oled`, `ping`, and `capture_photo` commands. Remote

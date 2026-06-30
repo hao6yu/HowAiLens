@@ -2,6 +2,7 @@
 #include "esp_camera.h"
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <WebSocketsClient.h>
 #include <Wire.h>
@@ -34,6 +35,14 @@
 #define HAOLENS_GATEWAY_PORT 8000
 #endif
 
+#ifndef HAOLENS_GATEWAY_USE_TLS
+#define HAOLENS_GATEWAY_USE_TLS 0
+#endif
+
+#ifndef HAOLENS_GATEWAY_TLS_FINGERPRINT
+#define HAOLENS_GATEWAY_TLS_FINGERPRINT ""
+#endif
+
 #ifndef HAOLENS_GATEWAY_SESSION_ID
 #define HAOLENS_GATEWAY_SESSION_ID "default"
 #endif
@@ -52,6 +61,8 @@ const char* WIFI_PASS = HAOLENS_WIFI_PASS;
 const char* BACKEND_URL = HAOLENS_BACKEND_URL;
 const char* GATEWAY_HOST = HAOLENS_GATEWAY_HOST;
 const uint16_t GATEWAY_PORT = HAOLENS_GATEWAY_PORT;
+const bool GATEWAY_USE_TLS = HAOLENS_GATEWAY_USE_TLS;
+const char* GATEWAY_TLS_FINGERPRINT = HAOLENS_GATEWAY_TLS_FINGERPRINT;
 const char* GATEWAY_SESSION_ID = HAOLENS_GATEWAY_SESSION_ID;
 const char* DEVICE_ID = HAOLENS_DEVICE_ID;
 const char* FIRMWARE_VERSION = HAOLENS_FIRMWARE_VERSION;
@@ -99,6 +110,7 @@ constexpr uint8_t OLED_MAX_LINES = HAOLENS_OLED_MAX_LINES;
 
 WebServer server(80);
 WebSocketsClient gatewayWs;
+WiFiClientSecure gatewaySecureClient;
 
 // ===== Latest touch-captured image stored in PSRAM =====
 uint8_t* lastJpeg = nullptr;
@@ -676,7 +688,7 @@ String gatewayDevicePath() {
 }
 
 String gatewayPhotoUploadUrl(const String& requestId) {
-  String url = "http://";
+  String url = GATEWAY_USE_TLS ? "https://" : "http://";
   url += GATEWAY_HOST;
   url += ":";
   url += String(static_cast<unsigned>(GATEWAY_PORT));
@@ -755,7 +767,16 @@ bool uploadLatestToGateway(const String& requestId) {
   HTTPClient http;
   http.setTimeout(GATEWAY_UPLOAD_TIMEOUT_MS);
 
-  if (!http.begin(uploadUrl)) {
+  bool httpStarted = false;
+
+  if (GATEWAY_USE_TLS) {
+    gatewaySecureClient.setInsecure();
+    httpStarted = http.begin(gatewaySecureClient, uploadUrl);
+  } else {
+    httpStarted = http.begin(uploadUrl);
+  }
+
+  if (!httpStarted) {
     Serial.println("Failed to start gateway upload HTTP connection.");
     sendGatewayError("gateway upload setup failed");
     showMessage("Gateway", "setup fail");
@@ -924,13 +945,19 @@ void initGatewayWebSocket() {
   }
 
   String path = gatewayDevicePath();
-  Serial.print("Gateway WebSocket: ws://");
+  Serial.print("Gateway WebSocket: ");
+  Serial.print(GATEWAY_USE_TLS ? "wss://" : "ws://");
   Serial.print(GATEWAY_HOST);
   Serial.print(":");
   Serial.print(GATEWAY_PORT);
   Serial.println(path);
 
-  gatewayWs.begin(GATEWAY_HOST, GATEWAY_PORT, path);
+  if (GATEWAY_USE_TLS) {
+    gatewayWs.beginSSL(GATEWAY_HOST, GATEWAY_PORT, path, GATEWAY_TLS_FINGERPRINT);
+  } else {
+    gatewayWs.begin(GATEWAY_HOST, GATEWAY_PORT, path);
+  }
+
   gatewayWs.onEvent(handleGatewayEvent);
   gatewayWs.setReconnectInterval(5000);
   gatewayWs.enableHeartbeat(15000, 3000, 2);

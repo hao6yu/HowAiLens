@@ -1,7 +1,37 @@
 # HowAILens IMSAIGateway Realtime Plan
 
-This plan is for restarting HowAILens work after the IMSAIGateway Realtime v2
-upgrade is complete.
+This plan tracks the HowAILens restart after the IMSAIGateway Realtime v2
+upgrade.
+
+## Current Integration Status
+
+As of the IMSAIGateway `develop` commit `4ff4c95`, the gateway-side V0.8.0
+shell exists:
+
+```text
+GET /api/v1/howailens/live
+WS  /api/v1/howailens/device/ws
+WS  /api/v1/howailens/portal/ws
+GET /api/v1/howailens/state
+POST /api/v1/howailens/photos/{request_id}
+GET /api/v1/howailens/photos/{request_id}
+```
+
+The shell includes an in-memory session manager, browser portal page, mock
+device script, raw image upload, and photo preview events. It does not yet
+bridge real device audio into Ruby's Realtime session.
+
+HowAILens firmware now has the V0.8.1 foundation:
+
+- optional IMSAIGateway WebSocket client configuration
+- `device_hello` on connect
+- periodic `status` heartbeat
+- remote `set_oled`
+- remote `ping`
+- remote `capture_photo` with JPEG upload to IMSAIGateway
+
+The existing touch capture, local backend upload, and XIAO debug page remain
+available.
 
 ## Goal
 
@@ -58,6 +88,9 @@ HowAILens currently has:
 - Wi-Fi connection.
 - Local backend upload loop.
 - OpenAI vision proof of concept through the local backend.
+- Optional IMSAIGateway device WebSocket connection.
+- Remote gateway-driven OLED status updates.
+- Remote gateway-driven photo capture/upload.
 
 IMSAIGateway currently has useful pieces that should be reused after the
 Realtime v2 upgrade:
@@ -159,6 +192,7 @@ Gateway to portal:
 - Add session manager skeleton for device, portal, and Realtime connections.
 - Add mock device script that sends fake or silent PCM chunks.
 - Show session status and mock transcript events in the portal.
+- Status: implemented in IMSAIGateway `develop` commit `4ff4c95`.
 
 Success:
 
@@ -172,6 +206,7 @@ No hardware required. Portal can connect to a session and receive events.
 - Send `device_hello`, periodic `status`, and heartbeat messages.
 - Receive `set_oled` and show status on OLED.
 - Keep current camera and local debug page working.
+- Status: firmware foundation implemented; hardware smoke test still needed.
 
 Success:
 
@@ -295,7 +330,7 @@ Then start with V0.8.0 using a mock device before touching firmware audio.
 
 ## First Implementation Task
 
-Create the IMSAIGateway-side skeleton first:
+The first IMSAIGateway-side skeleton is complete:
 
 ```text
 /api/v1/howailens/device/ws
@@ -303,5 +338,5 @@ Create the IMSAIGateway-side skeleton first:
 /api/v1/howailens/live
 ```
 
-Use a local mock device script to prove the gateway architecture before bringing
-in XIAO microphone complexity.
+Next, hardware-smoke the XIAO gateway connection before bringing in microphone
+complexity.

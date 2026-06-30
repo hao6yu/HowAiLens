@@ -11,6 +11,13 @@ Backend:
 - Receives JPEG uploads at `/analyze`.
 - Calls OpenAI when `OPENAI_API_KEY` is set in `.env`.
 
+IMSAIGateway:
+
+- Runs from the sibling `../IMSAIGateway` repo.
+- Hosts the HowAILens portal at `/api/v1/howailens/live`.
+- Receives the XIAO device WebSocket at `/api/v1/howailens/device/ws`.
+- Receives remote photo uploads at `/api/v1/howailens/photos/{request_id}`.
+
 Frontend:
 
 - Runs on the XIAO ESP32S3 firmware.
@@ -128,6 +135,51 @@ If the IP changes, read it from serial output after boot:
 
 ```text
 Open this URL: http://<XIAO_IP>
+```
+
+## IMSAIGateway Shell
+
+Run IMSAIGateway from its own configured Python environment:
+
+```sh
+cd ../IMSAIGateway
+uvicorn app.main:app --reload
+```
+
+Open the portal:
+
+```text
+http://<GATEWAY_IP>:8000/api/v1/howailens/live
+```
+
+For a no-hardware gateway smoke test, run the IMSAIGateway mock device:
+
+```sh
+cd ../IMSAIGateway
+python3 scripts/howailens_mock_device.py --base-url http://localhost:8000 --fake-audio
+```
+
+For a real XIAO gateway smoke test, set these in `include/secrets.h`, upload
+the firmware, then watch serial output:
+
+```cpp
+#define HAOLENS_GATEWAY_HOST "YOUR_GATEWAY_IP"
+#define HAOLENS_GATEWAY_PORT 8000
+#define HAOLENS_GATEWAY_SESSION_ID "default"
+#define HAOLENS_DEVICE_ID "howailens-dev-01"
+```
+
+Expected flow:
+
+```text
+XIAO boots
+-> connects to Wi-Fi
+-> opens gateway device WebSocket
+-> sends device_hello and status
+-> portal shows device online
+-> portal OLED button updates the tiny display
+-> portal Capture button triggers XIAO photo capture and upload
+-> portal timeline shows the photo
 ```
 
 ## Manual Test Flow

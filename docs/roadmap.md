@@ -44,6 +44,8 @@ Completed:
 - OpenAI vision integration through the backend.
 - OLED-safe AI response shaping for the 64x48 display.
 - Public repo docs for hardware, service ops, and future IMSAIGateway planning.
+- IMSAIGateway live shell routes and mock-device proof point.
+- Optional XIAO gateway WebSocket client for hello/status/OLED/photo commands.
 
 ## Near-Term Roadmap
 
@@ -62,11 +64,14 @@ Goal: keep the current camera/vision/OLED loop reliable enough for demos.
 Goal: prepare HowAILens to become an IMSAIGateway audio device after the
 gateway Realtime v2 upgrade.
 
-- Add a gateway-side HowAILens session shell.
+- Add a gateway-side HowAILens session shell. Done in IMSAIGateway commit
+  `4ff4c95`.
 - Use a mock device first, before hardware mic work.
 - Separate the device audio connection from the browser portal connection.
 - Let IMSAIGateway own the Ruby Realtime session.
 - Let the portal show transcript and session state.
+- Connect the XIAO firmware to the gateway shell for hello/status/OLED/photo
+  command smoke testing.
 
 Detailed plan:
 

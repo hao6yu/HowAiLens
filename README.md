@@ -34,6 +34,13 @@ V0.7 shapes AI responses for the tiny OLED:
 max 3 lines -> max 11 chars per line
 ```
 
+V0.8.1 starts the IMSAIGateway live connection:
+
+```text
+XIAO -> IMSAIGateway device WebSocket
+portal command -> remote OLED update or photo capture/upload
+```
+
 Future IMSAIGateway realtime-agent planning is captured in
 [docs/howailens-imsaigateway-realtime-plan.md](docs/howailens-imsaigateway-realtime-plan.md).
 
@@ -117,6 +124,37 @@ shareable template.
 
 The backend URL must use your Mac's LAN IP address, not `localhost`, because the
 XIAO is a separate device on Wi-Fi.
+
+## Configure IMSAIGateway Live
+
+The IMSAIGateway live connection is optional. Leave `HAOLENS_GATEWAY_HOST`
+empty to keep the older local backend-only behavior.
+
+To connect the XIAO to the IMSAIGateway V0.8 shell, add these values to
+`include/secrets.h`:
+
+```cpp
+#define HAOLENS_GATEWAY_HOST "YOUR_MAC_OR_GATEWAY_IP"
+#define HAOLENS_GATEWAY_PORT 8000
+#define HAOLENS_GATEWAY_SESSION_ID "default"
+#define HAOLENS_DEVICE_ID "howailens-dev-01"
+```
+
+Then run IMSAIGateway and open:
+
+```text
+http://<GATEWAY_IP>:8000/api/v1/howailens/live
+```
+
+The firmware connects to:
+
+```text
+ws://<GATEWAY_IP>:8000/api/v1/howailens/device/ws?session_id=default
+```
+
+The gateway can send `set_oled`, `ping`, and `capture_photo` commands. Remote
+photo capture uploads the JPEG to IMSAIGateway while the original touch capture
+and local backend flow remain available.
 
 ## Local Backend
 

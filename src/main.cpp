@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <WebSocketsClient.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -25,10 +26,35 @@
 #define HAOLENS_BACKEND_URL ""
 #endif
 
+#ifndef HAOLENS_GATEWAY_HOST
+#define HAOLENS_GATEWAY_HOST ""
+#endif
+
+#ifndef HAOLENS_GATEWAY_PORT
+#define HAOLENS_GATEWAY_PORT 8000
+#endif
+
+#ifndef HAOLENS_GATEWAY_SESSION_ID
+#define HAOLENS_GATEWAY_SESSION_ID "default"
+#endif
+
+#ifndef HAOLENS_DEVICE_ID
+#define HAOLENS_DEVICE_ID "howailens-dev-01"
+#endif
+
+#ifndef HAOLENS_FIRMWARE_VERSION
+#define HAOLENS_FIRMWARE_VERSION "0.8.1"
+#endif
+
 // ===== Wi-Fi =====
 const char* WIFI_SSID = HAOLENS_WIFI_SSID;
 const char* WIFI_PASS = HAOLENS_WIFI_PASS;
 const char* BACKEND_URL = HAOLENS_BACKEND_URL;
+const char* GATEWAY_HOST = HAOLENS_GATEWAY_HOST;
+const uint16_t GATEWAY_PORT = HAOLENS_GATEWAY_PORT;
+const char* GATEWAY_SESSION_ID = HAOLENS_GATEWAY_SESSION_ID;
+const char* DEVICE_ID = HAOLENS_DEVICE_ID;
+const char* FIRMWARE_VERSION = HAOLENS_FIRMWARE_VERSION;
 
 // ===== OLED =====
 #define SCREEN_WIDTH 64
@@ -72,6 +98,7 @@ constexpr uint8_t OLED_MAX_LINES = HAOLENS_OLED_MAX_LINES;
 #define PCLK_GPIO_NUM 13
 
 WebServer server(80);
+WebSocketsClient gatewayWs;
 
 // ===== Latest touch-captured image stored in PSRAM =====
 uint8_t* lastJpeg = nullptr;
@@ -89,13 +116,22 @@ const unsigned long TOUCH_DEBOUNCE_MS = 800;
 // ===== Connection state =====
 bool wifiWasConnected = false;
 bool backendAvailable = false;
+bool gatewayConnected = false;
+bool gatewayWasConfigured = false;
 unsigned long lastWifiReconnectAttempt = 0;
+unsigned long lastGatewayStatusSent = 0;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 const unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
 const unsigned long BACKEND_HEALTH_TIMEOUT_MS = 5000;
 const unsigned long BACKEND_UPLOAD_TIMEOUT_MS = 15000;
+const unsigned long GATEWAY_STATUS_INTERVAL_MS = 5000;
+const unsigned long GATEWAY_UPLOAD_TIMEOUT_MS = 15000;
 
 bool backendIsConfigured();
+bool gatewayIsConfigured();
+bool captureAndStoreLatest();
+void sendGatewayStatus(const char* state = "online");
+void sendGatewayError(const char* message);
 
 // ===== OLED helper =====
 String fitOledLine(String line) {
@@ -277,6 +313,14 @@ void handleRoot() {
   html += "<p>Backend: ";
   html += backendIsConfigured() ? (backendAvailable ? "OK" : "not reachable") : "off";
   html += "</p>";
+  html += "<p>Gateway: ";
+  html += gatewayIsConfigured() ? (gatewayConnected ? "connected" : "not connected") : "off";
+  html += "</p>";
+  if (gatewayIsConfigured()) {
+    html += "<p>Gateway host: ";
+    appendHtmlEscaped(html, String(GATEWAY_HOST) + ":" + String(static_cast<unsigned>(GATEWAY_PORT)));
+    html += "</p>";
+  }
   html += "<p>Last capture: ";
   html += lastJpegLen > 0 ? String(static_cast<unsigned>(lastJpegLen)) + " bytes" : "none";
   html += "</p>";
@@ -381,6 +425,10 @@ bool captureAndStoreLatest() {
 
 bool backendIsConfigured() {
   return std::strlen(BACKEND_URL) > 0 && std::strstr(BACKEND_URL, "YOUR_MAC_IP") == nullptr;
+}
+
+bool gatewayIsConfigured() {
+  return std::strlen(GATEWAY_HOST) > 0 && std::strstr(GATEWAY_HOST, "YOUR_GATEWAY_HOST") == nullptr;
 }
 
 String backendHealthUrl() {
@@ -503,6 +551,7 @@ void ensureWiFiConnected() {
     showMessage("WiFi lost", "Retrying");
     wifiWasConnected = false;
     backendAvailable = false;
+    gatewayConnected = false;
   }
 
   if (now - lastWifiReconnectAttempt < WIFI_RECONNECT_INTERVAL_MS) {
@@ -620,6 +669,286 @@ bool uploadLatestToBackend() {
   return true;
 }
 
+String gatewayDevicePath() {
+  String path = "/api/v1/howailens/device/ws?session_id=";
+  path += GATEWAY_SESSION_ID;
+  return path;
+}
+
+String gatewayPhotoUploadUrl(const String& requestId) {
+  String url = "http://";
+  url += GATEWAY_HOST;
+  url += ":";
+  url += String(static_cast<unsigned>(GATEWAY_PORT));
+  url += "/api/v1/howailens/photos/";
+  url += requestId;
+  url += "?session_id=";
+  url += GATEWAY_SESSION_ID;
+  return url;
+}
+
+bool sendGatewayJson(StaticJsonDocument<384>& doc) {
+  if (!gatewayConnected) {
+    return false;
+  }
+
+  String payload;
+  serializeJson(doc, payload);
+  return gatewayWs.sendTXT(payload);
+}
+
+void sendGatewayHello() {
+  StaticJsonDocument<384> doc;
+  doc["type"] = "device_hello";
+  doc["device_id"] = DEVICE_ID;
+  doc["firmware"] = FIRMWARE_VERSION;
+  sendGatewayJson(doc);
+}
+
+void sendGatewayStatus(const char* state) {
+  StaticJsonDocument<384> doc;
+  doc["type"] = "status";
+  doc["state"] = state;
+  doc["device_id"] = DEVICE_ID;
+  doc["wifi_rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+  sendGatewayJson(doc);
+}
+
+void sendGatewayPhotoReady(const String& requestId, const String& uploadUrl) {
+  StaticJsonDocument<384> doc;
+  doc["type"] = "photo_ready";
+  doc["request_id"] = requestId;
+  doc["upload_url"] = uploadUrl;
+  sendGatewayJson(doc);
+}
+
+void sendGatewayError(const char* message) {
+  StaticJsonDocument<384> doc;
+  doc["type"] = "error";
+  doc["message"] = message;
+  sendGatewayJson(doc);
+}
+
+bool uploadLatestToGateway(const String& requestId) {
+  if (lastJpeg == nullptr || lastJpegLen == 0) {
+    Serial.println("No stored JPEG available for gateway upload.");
+    sendGatewayError("no photo to upload");
+    return false;
+  }
+
+  if (!gatewayIsConfigured()) {
+    Serial.println("Gateway is not configured; skipping gateway upload.");
+    return false;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected; cannot upload to gateway.");
+    sendGatewayError("wifi lost");
+    return false;
+  }
+
+  String uploadUrl = gatewayPhotoUploadUrl(requestId);
+  Serial.print("Uploading latest image to gateway: ");
+  Serial.println(uploadUrl);
+  showMessage("Gateway", "upload");
+
+  HTTPClient http;
+  http.setTimeout(GATEWAY_UPLOAD_TIMEOUT_MS);
+
+  if (!http.begin(uploadUrl)) {
+    Serial.println("Failed to start gateway upload HTTP connection.");
+    sendGatewayError("gateway upload setup failed");
+    showMessage("Gateway", "setup fail");
+    return false;
+  }
+
+  http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("Cache-Control", "no-store");
+
+  int statusCode = http.POST(lastJpeg, lastJpegLen);
+  String responseBody = statusCode > 0 ? http.getString() : "";
+  String errorText = statusCode <= 0 ? http.errorToString(statusCode) : "";
+  http.end();
+
+  Serial.printf("Gateway upload HTTP status: %d\n", statusCode);
+  Serial.print("Gateway response: ");
+  Serial.println(responseBody);
+
+  if (statusCode <= 0) {
+    Serial.print("Gateway upload error: ");
+    Serial.println(errorText);
+    sendGatewayError("gateway upload failed");
+    showMessage("Gateway", "upload fail");
+    return false;
+  }
+
+  if (statusCode < 200 || statusCode >= 300) {
+    char statusText[16];
+    snprintf(statusText, sizeof(statusText), "HTTP %d", statusCode);
+    sendGatewayError(statusText);
+    showMessage("Gateway", "upload fail", statusText);
+    return false;
+  }
+
+  lastUploadStatus = "gateway ok";
+  lastResultTime = millis();
+  sendGatewayPhotoReady(requestId, uploadUrl);
+  showMessage("Gateway", "photo sent");
+  return true;
+}
+
+void applyGatewayOledLines(JsonArray linesJson) {
+  String lines[OLED_MAX_LINES];
+  uint8_t lineCount = 0;
+
+  for (JsonVariant value : linesJson) {
+    if (lineCount >= OLED_MAX_LINES) {
+      break;
+    }
+
+    String line = value.as<String>();
+    line.trim();
+
+    if (line.length() > 0) {
+      lines[lineCount++] = line;
+    }
+  }
+
+  if (lineCount > 0) {
+    drawOledLines(lines, lineCount);
+  }
+}
+
+void handleGatewayCaptureCommand(const char* requestId) {
+  if (requestId == nullptr || std::strlen(requestId) == 0) {
+    sendGatewayError("missing photo request id");
+    return;
+  }
+
+  Serial.print("Gateway requested photo: ");
+  Serial.println(requestId);
+  sendGatewayStatus("photo");
+
+  if (!captureAndStoreLatest()) {
+    sendGatewayError("camera capture failed");
+    sendGatewayStatus("online");
+    return;
+  }
+
+  uploadLatestToGateway(String(requestId));
+  sendGatewayStatus("online");
+}
+
+void handleGatewayText(uint8_t* payload, size_t length) {
+  StaticJsonDocument<768> doc;
+  DeserializationError error = deserializeJson(doc, reinterpret_cast<const char*>(payload), length);
+
+  if (error) {
+    Serial.print("Gateway JSON parse failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  const char* type = doc["type"] | "";
+  Serial.print("Gateway command: ");
+  Serial.println(type);
+
+  if (std::strcmp(type, "set_oled") == 0) {
+    JsonArray lines = doc["lines"].as<JsonArray>();
+    if (!lines.isNull()) {
+      applyGatewayOledLines(lines);
+    }
+    return;
+  }
+
+  if (std::strcmp(type, "capture_photo") == 0) {
+    handleGatewayCaptureCommand(doc["request_id"] | "");
+    return;
+  }
+
+  if (std::strcmp(type, "ping") == 0) {
+    sendGatewayStatus("online");
+    return;
+  }
+
+  if (std::strcmp(type, "start_audio") == 0) {
+    sendGatewayStatus("listening");
+    showMessage("Listening", "Ruby");
+    return;
+  }
+
+  if (std::strcmp(type, "stop_audio") == 0) {
+    sendGatewayStatus("online");
+    showReady();
+    return;
+  }
+}
+
+void handleGatewayEvent(WStype_t type, uint8_t* payload, size_t length) {
+  switch (type) {
+    case WStype_CONNECTED:
+      gatewayConnected = true;
+      Serial.println("Gateway WebSocket connected.");
+      showMessage("Gateway", "online");
+      sendGatewayHello();
+      sendGatewayStatus("online");
+      break;
+
+    case WStype_DISCONNECTED:
+      if (gatewayConnected) {
+        Serial.println("Gateway WebSocket disconnected.");
+      }
+      gatewayConnected = false;
+      break;
+
+    case WStype_TEXT:
+      handleGatewayText(payload, length);
+      break;
+
+    case WStype_ERROR:
+      Serial.println("Gateway WebSocket error.");
+      gatewayConnected = false;
+      break;
+
+    default:
+      break;
+  }
+}
+
+void initGatewayWebSocket() {
+  gatewayWasConfigured = gatewayIsConfigured();
+
+  if (!gatewayWasConfigured) {
+    Serial.println("Gateway WebSocket is not configured.");
+    return;
+  }
+
+  String path = gatewayDevicePath();
+  Serial.print("Gateway WebSocket: ws://");
+  Serial.print(GATEWAY_HOST);
+  Serial.print(":");
+  Serial.print(GATEWAY_PORT);
+  Serial.println(path);
+
+  gatewayWs.begin(GATEWAY_HOST, GATEWAY_PORT, path);
+  gatewayWs.onEvent(handleGatewayEvent);
+  gatewayWs.setReconnectInterval(5000);
+  gatewayWs.enableHeartbeat(15000, 3000, 2);
+}
+
+void serviceGatewayWebSocket() {
+  if (!gatewayWasConfigured || WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  gatewayWs.loop();
+
+  if (gatewayConnected && millis() - lastGatewayStatusSent >= GATEWAY_STATUS_INTERVAL_MS) {
+    lastGatewayStatusSent = millis();
+    sendGatewayStatus("online");
+  }
+}
+
 // ===== View last touch-triggered capture =====
 void handleLast() {
   if (lastJpeg == nullptr || lastJpegLen == 0) {
@@ -695,12 +1024,14 @@ void setup() {
   server.begin();
 
   Serial.println("HTTP server started.");
+  initGatewayWebSocket();
   showReady();
 }
 
 void loop() {
   ensureWiFiConnected();
   server.handleClient();
+  serviceGatewayWebSocket();
 
   bool touched = digitalRead(TOUCH_PIN) == HIGH;
   unsigned long now = millis();
